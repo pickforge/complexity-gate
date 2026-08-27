@@ -81,8 +81,8 @@ pub fn parse_diff_hunks(diff: &str) -> BTreeMap<PathBuf, Vec<LineRange>> {
     let mut result = BTreeMap::new();
     let mut file = None;
     for line in diff.lines() {
-        if let Some(path) = line.strip_prefix("+++ b/") {
-            file = Some(PathBuf::from(path));
+        if let Some(path) = line.strip_prefix("+++ ") {
+            file = diff_path(path);
             continue;
         }
         if !line.starts_with("@@") {
@@ -97,6 +97,14 @@ pub fn parse_diff_hunks(diff: &str) -> BTreeMap<PathBuf, Vec<LineRange>> {
         }
     }
     result
+}
+
+fn diff_path(value: &str) -> Option<PathBuf> {
+    if value == "/dev/null" {
+        return None;
+    }
+    let path = value.split_once('/').map_or(value, |(_, path)| path);
+    Some(PathBuf::from(path))
 }
 
 fn post_image_range(header: &str) -> Option<LineRange> {
@@ -121,7 +129,7 @@ mod tests {
 
     #[test]
     fn synthetic_hunks_use_post_image_and_skip_deletions() {
-        let diff = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
+        let diff = "diff --git c/a.rs w/a.rs\n--- c/a.rs\n+++ w/a.rs\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
         let spans = parse_diff_hunks(diff);
         assert_eq!(
             spans[Path::new("a.rs")],

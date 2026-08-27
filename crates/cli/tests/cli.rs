@@ -59,15 +59,21 @@ fn check_exit_codes_follow_contract() {
 fn both_hook_commands_parse_current_post_tool_input() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("bad.js");
+    fs::write(&file, "function bad(x) { return x; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "bad.js"]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
     fs::write(&file, complex_function()).unwrap();
     for harness in ["claude", "codex"] {
-        let tool = if harness == "codex" {
-            "apply_patch"
+        let (tool, tool_input) = if harness == "codex" {
+            ("apply_patch", serde_json::json!({"command":"patch"}))
         } else {
-            "Edit"
+            ("Edit", serde_json::json!({"file_path":file}))
         };
         let input = serde_json::json!({"hook_event_name":"PostToolUse", "session_id":"test",
-            "cwd":dir.path(), "tool_name":tool, "tool_input":{"file_path":file}})
+            "cwd":dir.path(), "tool_name":tool, "tool_input":tool_input})
         .to_string();
         let mut child = binary()
             .args(["hook", harness])
@@ -87,6 +93,17 @@ fn both_hook_commands_parse_current_post_tool_input() {
         let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(value["decision"], "block");
     }
+}
+
+fn git(cwd: &std::path::Path, args: &[&str]) {
+    assert!(
+        Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .status()
+            .unwrap()
+            .success()
+    );
 }
 
 fn complex_function() -> String {

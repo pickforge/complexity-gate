@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use tree_sitter::{Language as TsLanguage, Node, Parser};
+use tree_sitter::{Language as TsLanguage, Node, Parser, Tree};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
@@ -526,7 +526,7 @@ fn function_name(node: Node<'_>, language: Language, source: &str) -> String {
     "<anonymous>".to_owned()
 }
 
-fn direct_name<'a>(node: Node<'a>, source: &'a str) -> Option<&'a str> {
+fn direct_name<'source>(node: Node<'_>, source: &'source str) -> Option<&'source str> {
     if let Some(named) = node.child_by_field_name("name") {
         return named.utf8_text(source.as_bytes()).ok();
     }
@@ -594,13 +594,23 @@ fn qualify_method(node: Node<'_>, language: Language, name: &str, source: &str) 
     let mut parent = node.parent();
     while let Some(item) = parent {
         if type_kinds.contains(&item.kind())
-            && let Some(owner) = direct_name(item, source)
+            && let Some(owner) = type_owner(item, language, source)
         {
             return format!("{owner}.{name}");
         }
         parent = item.parent();
     }
     name.to_owned()
+}
+
+fn type_owner<'a>(node: Node<'_>, language: Language, source: &'a str) -> Option<&'a str> {
+    if language == Language::Rust {
+        return node
+            .child_by_field_name("type")?
+            .utf8_text(source.as_bytes())
+            .ok();
+    }
+    direct_name(node, source)
 }
 
 fn has_ancestor(node: Node<'_>, kind: &str) -> bool {
@@ -671,11 +681,11 @@ fn go_parameter_count(node: Node<'_>) -> usize {
 }
 
 fn receiver_parameter(node: Node<'_>, source: &str) -> bool {
+    let text = node_text(node, source).trim();
     matches!(node.kind(), "self_parameter")
-        || matches!(
-            node_text(node, source).trim(),
-            "self" | "&self" | "&mut self" | "this"
-        )
+        || matches!(text, "self" | "&self" | "&mut self" | "this")
+        || text.starts_with("self:")
+        || text.starts_with("this:")
 }
 
 fn significant_lines(source: &str, start: usize, end: usize, language: Language) -> usize {
@@ -706,7 +716,7 @@ fn node_text<'a>(node: Node<'_>, source: &'a str) -> &'a str {
 }
 
 fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
-    validate_svelte_grammar(source)?;
+    let tree = parse_svelte_tree(source)?;
     let blocks = svelte_blocks(source);
     let mut functions = Vec::new();
     for block in blocks.iter().filter(|block| block.kind == "script") {
@@ -722,28 +732,25 @@ fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
             block.start_line,
         )?);
     }
-    functions.push(measure_template(source, &blocks));
+    functions.push(measure_template(tree.root_node(), source));
     functions.sort_by_key(|item| (item.line, item.end_line));
     Ok(functions)
 }
 
-fn validate_svelte_grammar(source: &str) -> Result<()> {
+fn parse_svelte_tree(source: &str) -> Result<Tree> {
     let mut parser = Parser::new();
     parser
         .set_language(&tree_sitter_svelte_ng::LANGUAGE.into())
         .context("incompatible Svelte grammar")?;
     parser
         .parse(source, None)
-        .context("Svelte parser returned no tree")?;
-    Ok(())
+        .context("Svelte parser returned no tree")
 }
 
 struct SvelteBlock<'a> {
     kind: &'static str,
     opening: &'a str,
     content: &'a str,
-    start: usize,
-    end: usize,
     start_line: usize,
 }
 
@@ -765,8 +772,6 @@ fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
                 kind,
                 opening: &source[start..open_end],
                 content: &source[open_end..end],
-                start,
-                end: end + kind.len() + 3,
                 start_line: source[..open_end]
                     .bytes()
                     .filter(|byte| *byte == b'\n')
@@ -778,51 +783,46 @@ fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
     blocks
 }
 
-fn measure_template(source: &str, blocks: &[SvelteBlock<'_>]) -> FunctionMetrics {
-    let mut complexity = 1;
-    let mut depth: usize = 0;
-    let mut max_depth = 0;
-    for (index, line) in source.lines().enumerate() {
-        let byte = source
-            .lines()
-            .take(index)
-            .map(|item| item.len() + 1)
-            .sum::<usize>();
-        if blocks
-            .iter()
-            .any(|block| byte >= block.start && byte < block.end)
-        {
-            continue;
-        }
-        let trimmed = strip_html_comment(line.trim());
-        let decisions = ["{#if ", "{:else if ", "{#each ", "{#await ", "{:catch"]
-            .iter()
-            .filter(|token| trimmed.contains(**token))
-            .count();
-        complexity += decisions + expression_decisions(trimmed);
-        if trimmed.contains("{/if}") || trimmed.contains("{/each}") || trimmed.contains("{/await}")
-        {
-            depth = depth.saturating_sub(1);
-        }
-        if trimmed.contains("{#if ") || trimmed.contains("{#each ") || trimmed.contains("{#await ")
-        {
-            depth += 1;
-            max_depth = max_depth.max(depth);
-        }
-    }
+fn measure_template(root: Node<'_>, source: &str) -> FunctionMetrics {
+    let mut score = Score {
+        complexity: 1,
+        depth: 0,
+    };
+    measure_svelte_node(root, source, 0, &mut score);
     FunctionMetrics {
         function: "<template>".to_owned(),
         line: 1,
         end_line: source.lines().count().max(1),
-        complexity,
-        depth: max_depth,
+        complexity: score.complexity,
+        depth: score.depth,
         lines: 0,
         params: 0,
     }
 }
 
-fn strip_html_comment(line: &str) -> &str {
-    line.split("<!--").next().unwrap_or(line)
+fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut Score) {
+    if matches!(node.kind(), "script_element" | "style_element") {
+        return;
+    }
+    if matches!(
+        node.kind(),
+        "if_start" | "else_if_start" | "each_start" | "await_start" | "catch_start"
+    ) {
+        score.complexity += 1;
+    }
+    if node.kind() == "svelte_raw_text" {
+        score.complexity += expression_decisions(node_text(node, source));
+    }
+    let opens = matches!(
+        node.kind(),
+        "if_statement" | "each_statement" | "await_statement"
+    );
+    let next_depth = depth + usize::from(opens);
+    score.depth = score.depth.max(next_depth);
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        measure_svelte_node(child, source, next_depth, score);
+    }
 }
 
 fn expression_decisions(line: &str) -> usize {
@@ -839,7 +839,9 @@ fn expression_decisions(line: &str) -> usize {
                 && index
                     .checked_sub(1)
                     .is_none_or(|before| bytes[before] != b'?')
-                && bytes.get(index + 1).is_none_or(|after| *after != b'?')
+                && bytes
+                    .get(index + 1)
+                    .is_none_or(|after| !matches!(*after, b'?' | b'.'))
         })
         .count();
     pairs + ternary

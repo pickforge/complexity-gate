@@ -31,6 +31,7 @@ struct HookInput {
 enum Event {
     Ignore,
     File(PathBuf),
+    Changed,
     Stop,
 }
 
@@ -48,6 +49,7 @@ fn handle(harness: Harness, input: &HookInput) -> Result<()> {
     match classify(harness, input) {
         Event::Ignore => Ok(()),
         Event::File(path) => report_post_edit(input, &[path]),
+        Event::Changed => report_post_changed(input),
         Event::Stop => report_stop(input),
     }
 }
@@ -56,7 +58,7 @@ fn classify(harness: Harness, input: &HookInput) -> Event {
     match input.hook_event_name.as_str() {
         "Stop" => Event::Stop,
         "PostToolUse" if post_tool(harness, input.tool_name.as_deref()) => {
-            file_path(&input.tool_input).map_or(Event::Stop, Event::File)
+            file_path(&input.tool_input).map_or(Event::Changed, Event::File)
         }
         _ => Event::Ignore,
     }
@@ -82,6 +84,20 @@ fn report_post_edit(input: &HookInput, paths: &[PathBuf]) -> Result<()> {
         paths,
         explicit_config: None,
         changed: None,
+    })?;
+    if result.violations.is_empty() {
+        return Ok(());
+    }
+    emit_block(&text_report(&result.violations))
+}
+
+fn report_post_changed(input: &HookInput) -> Result<()> {
+    let changes = changed_files(&input.cwd)?;
+    let result = scan(&ScanOptions {
+        cwd: &input.cwd,
+        paths: &[],
+        explicit_config: None,
+        changed: Some(&changes),
     })?;
     if result.violations.is_empty() {
         return Ok(());
@@ -217,6 +233,6 @@ mod tests {
                 json!({"command":"patch"}),
             ),
         );
-        assert!(matches!(event, Event::Stop));
+        assert!(matches!(event, Event::Changed));
     }
 }
