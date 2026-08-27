@@ -115,6 +115,31 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
 }
 
 #[test]
+fn changed_explicit_paths_normalize_parent_components() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir(&src).unwrap();
+    fs::write(src.join("tracked.js"), "function tracked() { return 1; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(dir.path().join("untracked.js"), complex_function()).unwrap();
+
+    for path in ["../untracked.js", ".."] {
+        let output = command_output(&src, &["check", "--changed", path]);
+        assert_eq!(output.status.code(), Some(1), "path: {path}");
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("../untracked.js"),
+            "path: {path}; stdout: {}; stderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn changed_config_is_noted_in_text_and_json_reports() {
     let dir = tempfile::tempdir().unwrap();
     let config = dir.path().join(".complexity-gate.json");

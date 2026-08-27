@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::ErrorKind,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
@@ -303,11 +303,32 @@ fn add_violations(
 }
 
 fn absolute(cwd: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() {
+    let path = if path.is_absolute() {
         path.to_path_buf()
     } else {
         cwd.join(path)
+    };
+    normalize(&path)
+}
+
+fn normalize(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match normalized.components().next_back() {
+                Some(Component::Normal(_)) => {
+                    normalized.pop();
+                }
+                Some(Component::ParentDir) | None if !normalized.has_root() => {
+                    normalized.push(component);
+                }
+                _ => {}
+            },
+            _ => normalized.push(component),
+        }
     }
+    normalized
 }
 
 fn relative(base: &Path, path: &Path) -> PathBuf {
