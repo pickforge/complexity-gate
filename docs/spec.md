@@ -48,7 +48,8 @@ Not counted: optional chaining `?.`, Rust `?`, null assertions, `finally`,
 ### Depth
 
 Constructs that open a level: `if`/`else` bodies, loops, `switch`/`match`, `try`
-bodies and `catch`, Python `with`. An `else if` / `elif` chain stays at the level
+(the `try` body and every `catch`/`except`/`finally` body sit at the same level,
+as in ESLint `max-depth`), Python `with`. An `else if` / `elif` chain stays at the level
 of its first `if`. Conditional expressions and boolean operators do not add depth.
 A nested function starts again at 0 and its body does not contribute to the
 enclosing function's depth.
@@ -134,7 +135,9 @@ complexity-gate --version
 - With `paths`: check those files/directories (directories recurse, honoring
   `.gitignore` and config `ignore`).
 - With `--changed`: only functions touched by the working-tree diff against `HEAD`
-  (staged + unstaged) plus untracked files in full. A function is "touched" when
+  (staged + unstaged) plus untracked files in full. Paths are resolved against
+  the repository root (`git rev-parse --show-toplevel`), so the result is the same
+  from any cwd inside the repository; reported paths are relative to the cwd. A function is "touched" when
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
   falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
@@ -164,6 +167,12 @@ UNVERIFIED src/Foo.kt  no grammar for .kt
 
 - Exit codes: `0` no violations; `1` at least one violation; `2` usage or runtime
   error (bad config, unreadable path). `UNVERIFIED` alone never fails.
+- `UNVERIFIED` is emitted for a file that is explicitly named on the command
+  line, or that has a known source-code extension with no grammar (`.kt .java
+  .c .cc .cpp .h .hpp .cs .swift .rb .php .scala .lua .zig .m .mm .ex .exs .hs
+  .clj .sh .bash .pl .r`), or that cannot be decoded as UTF-8. Non-source files
+  found while walking a directory (`.md`, `.json`, `.toml`, images, …) are
+  skipped silently. A file that cannot be read never aborts the scan.
 
 ### `hook claude`
 
@@ -178,10 +187,14 @@ Reads the Claude Code hook JSON from stdin and dispatches on `hook_event_name`:
   `{"decision":"block","reason":"<text report>\nRefactor the listed functions
   (see the complexity-gate skill), then finish."}` and exit 0, which prevents the
   agent from stopping. Loop guard: consecutive blocks per `session_id` are counted
-  in the state directory; at `hook.max_blocks` (default 3) the hook allows the
-  stop and prints the report prefixed with `UNRESOLVED` to stderr, exit 0.
-  A clean run resets the counter.
-- Any other event → exit 0, no output.
+  in the state directory. The hook blocks at most `hook.max_blocks` times
+  (default 3); every later Stop with violations is allowed and prints the report
+  prefixed with `UNRESOLVED` to stderr, exit 0. Only a clean run resets the
+  counter (an `UNRESOLVED` release does not). State file names derive from a
+  sanitized `session_id`, never from a toolchain-dependent hash.
+- Any other event → exit 0, no output. Missing optional fields (`session_id`,
+  `cwd`) never cause a non-zero exit: `cwd` defaults to the process cwd and a
+  missing `session_id` uses an unkeyed counter.
 - Never exit non-zero from the hook for gate results; reserve non-zero for
   runtime errors, with a one-line stderr message.
 
@@ -236,6 +249,9 @@ Resolution, later wins, shallow merge per top-level key:
 }
 ```
 
+`tests.patterns` and `ignore` globs match paths relative to the Git repository
+root (or to the scan root outside Git), never to the process cwd.
+
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
 with the key named.
@@ -258,8 +274,12 @@ Reference numbers are derived once from the reference tool and recorded in the
 fixture's `expected.json` under `reference` with the tool name and version:
 ESLint `complexity` for JS/TS, `radon` for Python, `gocyclo` for Go, `lizard`
 for Rust, hand-derived with a per-line comment for Dart and Svelte templates. A
-test asserts `ours >= reference` for complexity on every fixture (strictness
-invariant) and exact equality with our own committed expectations.
+test asserts `reference <= ours <= reference + delta` for complexity on every
+fixture, where `delta` is recorded per fixture in `expected.json` with the reason
+(default 0), plus exact equality with our own committed expectations. Every
+language fixture includes a multi-branch `else if` chain, a `try`/`catch`, an
+operator inside a string literal, and an anonymous callback inside a named
+function.
 
 ## Repository gates
 
