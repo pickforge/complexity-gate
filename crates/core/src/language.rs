@@ -116,17 +116,17 @@ pub fn grammar_inventory() -> Vec<GrammarInfo> {
 
 pub fn coverage_unknowns() -> Vec<(&'static str, Vec<String>)> {
     let languages = [
-        Language::JavaScript,
-        Language::TypeScript,
-        Language::Tsx,
-        Language::Dart,
-        Language::Rust,
-        Language::Python,
-        Language::Go,
+        ("javascript", Language::JavaScript),
+        ("typescript", Language::TypeScript),
+        ("tsx", Language::Tsx),
+        ("dart", Language::Dart),
+        ("rust", Language::Rust),
+        ("python", Language::Python),
+        ("go", Language::Go),
     ];
     let mut result: Vec<_> = languages
         .into_iter()
-        .map(|language| (language.name(), unknown_kinds(language.grammar())))
+        .map(|(name, language)| (name, unknown_kinds(language.grammar())))
         .collect();
     result.push((
         "svelte",
@@ -183,16 +183,22 @@ fn coverage_classified(kind: &str) -> bool {
             | "if_element"
             | "elif_clause"
             | "for_statement"
+            | "for_in_statement"
             | "for_expression"
             | "for_element"
             | "for_in_clause"
+            | "if_clause"
             | "while_statement"
             | "while_expression"
             | "loop_expression"
             | "switch_statement"
             | "switch_expression"
+            | "expression_switch_statement"
+            | "type_switch_statement"
             | "switch_statement_case"
             | "switch_statement_default"
+            | "switch_case"
+            | "switch_default"
             | "switch_expression_case"
             | "match_statement"
             | "match_expression"
@@ -212,7 +218,48 @@ fn coverage_classified(kind: &str) -> bool {
             | "logical_and_expression"
             | "logical_or_expression"
             | "if_null_expression"
-    )
+            | "if_start"
+            | "else_if_start"
+            | "each_start"
+            | "await_start"
+            | "catch_start"
+    ) || coverage_ignored(kind)
+}
+
+fn coverage_ignored(kind: &str) -> bool {
+    kind.starts_with('_')
+        || kind.contains("_repeat")
+        || kind.contains("identifier")
+        || kind.contains("parameter")
+        || kind.contains("modifier")
+        || kind.contains("specifier")
+        || matches!(
+            kind,
+            "accessibility_modifier"
+                | "catch_block"
+                | "conditional_type"
+                | "default_case"
+                | "else_if_block"
+                | "except_clause_repeat1"
+                | "for_clause"
+                | "for_lifetimes"
+                | "foreign_mod_item"
+                | "for_in_clause_repeat1"
+                | "format_expression"
+                | "format_specifier"
+                | "if_end"
+                | "if_statement_repeat1"
+                | "import_specification"
+                | "lifetime"
+                | "match_block"
+                | "match_pattern"
+                | "qualified"
+                | "qualified_type"
+                | "shift_expression"
+                | "switch_block"
+                | "switch_body"
+                | "type_case_repeat1"
+        )
 }
 
 pub fn parse_source(language: Language, source: &str) -> Result<Vec<FunctionMetrics>> {
