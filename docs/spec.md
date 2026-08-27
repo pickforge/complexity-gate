@@ -141,8 +141,12 @@ complexity-gate --version
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
   falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
-  The changed file set comes straight from Git (diff + untracked); it is not
-  filtered by `.gitignore`, only by config `ignore`. Git is invoked with
+  The changed file set comes straight from Git: `git diff HEAD` post-image paths
+  (which already include tracked files that a later `.gitignore` rule covers)
+  plus untracked files from `git ls-files --others --exclude-standard`; config
+  `ignore` applies before any language lookup, so ignored paths never appear as
+  `UNVERIFIED`. Explicit paths are normalized (`.`/`..`) before intersecting.
+  Non-UTF-8 diff output is decoded lossily; hunk headers are ASCII. Git is invoked with
   `--no-ext-diff --no-textconv`, external diff, textconv, fsmonitor, and hooks
   disabled, and `GIT_DIR`/`GIT_WORK_TREE`/`GIT_EXTERNAL_DIFF`/`GIT_CONFIG_*`
   removed from its environment.
