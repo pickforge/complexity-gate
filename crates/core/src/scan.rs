@@ -1,5 +1,6 @@
 use std::{
     fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
 };
 
@@ -8,8 +9,14 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 
 use crate::{
-    ChangedFiles, Config, FunctionMetrics, Language, LineRange, load_config, parse_source,
+    ChangedFiles, Config, FunctionMetrics, Language, LineRange, diff::repository_root, load_config,
+    parse_source,
 };
+
+const UNVERIFIED_SOURCE_EXTENSIONS: &[&str] = &[
+    "kt", "java", "c", "cc", "cpp", "h", "hpp", "cs", "swift", "rb", "php", "scala", "lua", "zig",
+    "m", "mm", "ex", "exs", "hs", "clj", "sh", "bash", "pl", "r",
+];
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct Violation {
@@ -42,21 +49,19 @@ pub struct ScanOptions<'a> {
     pub changed: Option<&'a ChangedFiles>,
 }
 
+struct ScanFile {
+    path: PathBuf,
+    explicit: bool,
+}
+
 pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
-    let roots = if options.paths.is_empty() {
-        vec![options.cwd.to_path_buf()]
-    } else {
-        options
-            .paths
-            .iter()
-            .map(|path| absolute(options.cwd, path))
-            .collect()
-    };
+    let roots = scan_roots(options);
+    let match_base = match_base(options)?;
     let base_config = load_config(options.cwd, options.explicit_config)?.config;
-    let files = collect_files(&roots, &base_config)?;
+    let files = collect_files(&roots, &match_base, &base_config)?;
     let mut result = ScanResult::default();
     for file in files {
-        scan_file(&file, options, &mut result)?;
+        scan_file(&file, &match_base, options, &mut result)?;
     }
     result
         .violations
@@ -68,12 +73,34 @@ pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
     Ok(result)
 }
 
-fn collect_files(roots: &[PathBuf], config: &Config) -> Result<Vec<PathBuf>> {
+fn scan_roots(options: &ScanOptions<'_>) -> Vec<PathBuf> {
+    if options.paths.is_empty() {
+        vec![options.cwd.to_path_buf()]
+    } else {
+        options
+            .paths
+            .iter()
+            .map(|path| absolute(options.cwd, path))
+            .collect()
+    }
+}
+
+fn match_base(options: &ScanOptions<'_>) -> Result<PathBuf> {
+    if let Some(changed) = options.changed.filter(|changed| !changed.fallback) {
+        return Ok(changed.repo_root.clone());
+    }
+    Ok(repository_root(options.cwd)?.unwrap_or_else(|| options.cwd.to_path_buf()))
+}
+
+fn collect_files(roots: &[PathBuf], base: &Path, config: &Config) -> Result<Vec<ScanFile>> {
     let ignores = Config::matcher(&config.ignore)?;
     let mut files = Vec::new();
     for root in roots {
         if root.is_file() {
-            files.push(root.clone());
+            files.push(ScanFile {
+                path: root.clone(),
+                explicit: true,
+            });
             continue;
         }
         if !root.exists() {
@@ -85,39 +112,59 @@ fn collect_files(roots: &[PathBuf], config: &Config) -> Result<Vec<PathBuf>> {
             .build();
         for entry in walker {
             let entry = entry.with_context(|| format!("cannot walk {}", root.display()))?;
+            let path = entry.path();
             if entry.file_type().is_some_and(|kind| kind.is_file())
-                && !ignores.is_match(entry.path())
+                && !ignores.is_match(relative(base, path))
             {
-                files.push(entry.into_path());
+                files.push(ScanFile {
+                    path: entry.into_path(),
+                    explicit: false,
+                });
             }
         }
     }
-    files.sort();
-    files.dedup();
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    files.dedup_by(|a, b| a.path == b.path);
     Ok(files)
 }
 
-fn scan_file(file: &Path, options: &ScanOptions<'_>, result: &mut ScanResult) -> Result<()> {
-    let display = relative(options.cwd, file);
-    if !changed_file_selected(&display, options.changed) {
+fn scan_file(
+    file: &ScanFile,
+    match_base: &Path,
+    options: &ScanOptions<'_>,
+    result: &mut ScanResult,
+) -> Result<()> {
+    let display = relative(options.cwd, &file.path);
+    let matched_path = relative(match_base, &file.path);
+    if !changed_file_selected(&matched_path, options.changed) {
         return Ok(());
     }
-    let Some(language) = Language::from_path(file) else {
-        result.unverified.push(Unverified {
-            file: display,
-            reason: extension_reason(file),
-        });
+    let Some(language) = Language::from_path(&file.path) else {
+        if file.explicit || unverified_source_path(&file.path) {
+            result.unverified.push(Unverified {
+                file: display,
+                reason: extension_reason(&file.path),
+            });
+        }
         return Ok(());
     };
-    let config = load_config(file, options.explicit_config)?.config;
-    if Config::matcher(&config.ignore)?.is_match(&display) {
+    let config = load_config(&file.path, options.explicit_config)?.config;
+    if Config::matcher(&config.ignore)?.is_match(&matched_path) {
         return Ok(());
     }
-    let source =
-        fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
+    let source = match fs::read_to_string(&file.path) {
+        Ok(source) => source,
+        Err(error) => {
+            result.unverified.push(Unverified {
+                file: display,
+                reason: read_reason(&error),
+            });
+            return Ok(());
+        }
+    };
     let functions = parse_source(language, &source)?;
-    let test_file = Config::matcher(&config.tests.patterns)?.is_match(&display);
-    let spans = changed_spans(&display, options.changed);
+    let test_file = Config::matcher(&config.tests.patterns)?.is_match(&matched_path);
+    let spans = changed_spans(&matched_path, options.changed);
     for function in functions {
         if spans.is_some_and(|ranges| !touches(&function, ranges)) {
             continue;
@@ -188,8 +235,16 @@ fn absolute(cwd: &Path, path: &Path) -> PathBuf {
     }
 }
 
-fn relative(cwd: &Path, path: &Path) -> PathBuf {
-    path.strip_prefix(cwd).unwrap_or(path).to_path_buf()
+fn relative(base: &Path, path: &Path) -> PathBuf {
+    path.strip_prefix(base).unwrap_or(path).to_path_buf()
+}
+
+fn unverified_source_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|extension| {
+            UNVERIFIED_SOURCE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+        })
 }
 
 fn extension_reason(path: &Path) -> String {
@@ -199,4 +254,12 @@ fn extension_reason(path: &Path) -> String {
             || "no grammar for extensionless file".to_owned(),
             |extension| format!("no grammar for .{extension}"),
         )
+}
+
+fn read_reason(error: &std::io::Error) -> String {
+    if error.kind() == ErrorKind::InvalidData {
+        "not valid UTF-8".to_owned()
+    } else {
+        format!("cannot read: {error}")
+    }
 }

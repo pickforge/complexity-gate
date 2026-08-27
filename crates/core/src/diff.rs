@@ -20,24 +20,42 @@ impl LineRange {
 
 #[derive(Clone, Debug, Default)]
 pub struct ChangedFiles {
+    pub repo_root: PathBuf,
     pub spans: BTreeMap<PathBuf, Vec<LineRange>>,
     pub untracked: Vec<PathBuf>,
     pub fallback: bool,
 }
 
 pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
-    if !git_ok(cwd, &["rev-parse", "--verify", "HEAD"]) {
+    let Some(repo_root) = repository_root(cwd)? else {
         return Ok(ChangedFiles {
+            repo_root: cwd.to_path_buf(),
+            fallback: true,
+            ..ChangedFiles::default()
+        });
+    };
+    if !git_ok(&repo_root, &["rev-parse", "--verify", "HEAD"]) {
+        return Ok(ChangedFiles {
+            repo_root,
             fallback: true,
             ..ChangedFiles::default()
         });
     }
     let output = Command::new("git")
-        .current_dir(cwd)
+        .current_dir(&repo_root)
         .args([
             "-c",
             "core.quotePath=false",
+            "-c",
+            "diff.mnemonicPrefix=false",
+            "-c",
+            "diff.noprefix=false",
+            "-c",
+            "diff.srcPrefix=a/",
+            "-c",
+            "diff.dstPrefix=b/",
             "diff",
+            "--no-color",
             "--unified=0",
             "HEAD",
             "--",
@@ -52,11 +70,25 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
     }
     let text = String::from_utf8(output.stdout).context("git diff output was not UTF-8")?;
     let mut changed = ChangedFiles {
+        repo_root: repo_root.clone(),
         spans: parse_diff_hunks(&text),
         ..ChangedFiles::default()
     };
-    changed.untracked = untracked(cwd)?;
+    changed.untracked = untracked(&repo_root)?;
     Ok(changed)
+}
+
+pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
+    let output = Command::new("git")
+        .current_dir(cwd)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .context("failed to locate Git repository root")?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let root = String::from_utf8(output.stdout).context("Git repository root was not UTF-8")?;
+    Ok(Some(PathBuf::from(root.trim())))
 }
 
 fn git_ok(cwd: &Path, args: &[&str]) -> bool {
@@ -111,7 +143,7 @@ fn diff_path(value: &str) -> Option<PathBuf> {
         return None;
     }
     let value = value.split('\t').next().unwrap_or(value);
-    let path = value.split_once('/').map_or(value, |(_, path)| path);
+    let path = value.strip_prefix("b/")?;
     Some(PathBuf::from(path))
 }
 
@@ -137,7 +169,7 @@ mod tests {
 
     #[test]
     fn synthetic_hunks_use_post_image_and_skip_deletions() {
-        let diff = "diff --git c/a.rs w/a.rs\n--- c/a.rs\n+++ w/a.rs\t\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
+        let diff = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\t\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
         let spans = parse_diff_hunks(diff);
         assert_eq!(
             spans[Path::new("a.rs")],
