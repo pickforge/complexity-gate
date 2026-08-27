@@ -9,10 +9,6 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct Golden {
-    #[serde(default)]
-    delta: usize,
-    #[serde(default)]
-    delta_reason: Option<String>,
     reference: Reference,
     functions: Vec<Expected>,
 }
@@ -29,6 +25,14 @@ struct ReferenceFunction {
     function: String,
     line: usize,
     complexity: usize,
+    #[serde(default)]
+    delta: usize,
+    #[serde(default)]
+    delta_reason: Option<String>,
+    #[serde(default)]
+    hand_derived: bool,
+    #[serde(default)]
+    derivation: Option<String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -48,27 +52,12 @@ fn golden_fixtures_match_and_stay_within_reference_bounds() {
             serde_json::from_str(&fs::read_to_string(directory.join("expected.json")).unwrap())
                 .unwrap();
         assert!(!expected.reference.tool.is_empty() && !expected.reference.version.is_empty());
-        if expected.delta > 0 {
-            assert!(
-                expected
-                    .delta_reason
-                    .as_deref()
-                    .is_some_and(|reason| !reason.is_empty()),
-                "{} needs a reason for non-zero delta",
-                directory.display()
-            );
-        }
         let source_path = source_file(&directory);
         let source = fs::read_to_string(&source_path).unwrap();
         let actual = parse_source(Language::from_path(&source_path).unwrap(), &source).unwrap();
         let actual: Vec<_> = actual.into_iter().map(Expected::from).collect();
         assert_eq!(actual, expected.functions, "{}", directory.display());
-        assert_strictness(
-            &actual,
-            &expected.reference.functions,
-            expected.delta,
-            &directory,
-        );
+        assert_strictness(&actual, &expected.reference.functions, &directory);
     }
 }
 
@@ -91,16 +80,29 @@ fn source_file(directory: &Path) -> PathBuf {
         .unwrap()
 }
 
-fn assert_strictness(
-    actual: &[Expected],
-    references: &[ReferenceFunction],
-    delta: usize,
-    directory: &Path,
-) {
+fn assert_strictness(actual: &[Expected], references: &[ReferenceFunction], directory: &Path) {
     let ours: BTreeMap<_, _> = actual
         .iter()
         .map(|item| ((item.function.as_str(), item.line), item.complexity))
         .collect();
+    let reference_keys: BTreeMap<_, _> = references
+        .iter()
+        .map(|item| ((item.function.as_str(), item.line), item))
+        .collect();
+    assert_eq!(
+        reference_keys.len(),
+        references.len(),
+        "duplicate reference in {}",
+        directory.display()
+    );
+    for item in actual {
+        assert!(
+            reference_keys.contains_key(&(item.function.as_str(), item.line)),
+            "missing reference for {:?} in {}",
+            (item.function.as_str(), item.line),
+            directory.display()
+        );
+    }
     for reference in references {
         let key = (reference.function.as_str(), reference.line);
         let value = ours.get(&key).unwrap_or_else(|| {
@@ -117,10 +119,31 @@ fn assert_strictness(
             key,
             directory.display()
         );
+        if reference.delta > 0 {
+            assert!(
+                reference
+                    .delta_reason
+                    .as_deref()
+                    .is_some_and(|reason| !reason.is_empty()),
+                "{key:?} in {} needs a reason for non-zero delta",
+                directory.display()
+            );
+        }
+        if reference.hand_derived {
+            assert!(
+                reference
+                    .derivation
+                    .as_deref()
+                    .is_some_and(|derivation| !derivation.is_empty()),
+                "{key:?} in {} needs a hand derivation",
+                directory.display()
+            );
+        }
         assert!(
-            *value <= reference.complexity + delta,
-            "ours {value} > reference {} + delta {delta} for {:?} in {}",
+            *value <= reference.complexity + reference.delta,
+            "ours {value} > reference {} + delta {} for {:?} in {}",
             reference.complexity,
+            reference.delta,
             key,
             directory.display()
         );

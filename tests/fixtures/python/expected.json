@@ -1,5 +1,4 @@
 {
-  "delta": 0,
   "reference": {
     "tool": "radon cc -s",
     "version": "6.0.1",
@@ -58,6 +57,20 @@
         "function": "comment_lines",
         "line": 191,
         "complexity": 1
+      },
+      {
+        "function": "inner",
+        "line": 154,
+        "complexity": 2,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + one conditional expression"
+      },
+      {
+        "function": "<anonymous>",
+        "line": 188,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "base complexity 1; the lambda has no decision points"
       }
     ]
   },

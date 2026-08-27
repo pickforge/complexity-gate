@@ -1,6 +1,4 @@
 {
-  "delta": 3,
-  "delta_reason": "tree-sitter counts Rust loop, match arms, boolean operators, and let-else more strictly than lizard",
   "reference": {
     "tool": "lizard",
     "version": "1.24.0",
@@ -23,7 +21,9 @@
       {
         "function": "over_depth",
         "line": 40,
-        "complexity": 5
+        "complexity": 5,
+        "delta": 1,
+        "delta_reason": "tree-sitter counts the Rust loop expression that lizard omits"
       },
       {
         "function": "over_lines",
@@ -43,7 +43,9 @@
       {
         "function": "decisions",
         "line": 165,
-        "complexity": 9
+        "complexity": 9,
+        "delta": 3,
+        "delta_reason": "tree-sitter counts match arms, boolean operators, and let-else more strictly than lizard"
       },
       {
         "function": "review_cases",
@@ -54,6 +56,20 @@
         "function": "comment_lines",
         "line": 188,
         "complexity": 1
+      },
+      {
+        "function": "inner",
+        "line": 161,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "base complexity 1; the closure has no decision points"
+      },
+      {
+        "function": "<anonymous>",
+        "line": 184,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "base complexity 1; the closure has no decision points"
       }
     ]
   },

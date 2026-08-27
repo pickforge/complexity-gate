@@ -1,5 +1,4 @@
 {
-  "delta": 0,
   "reference": {
     "tool": "ESLint complexity",
     "version": "10.9.1",

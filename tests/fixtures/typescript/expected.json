@@ -1,5 +1,4 @@
 {
-  "delta": 0,
   "reference": {
     "tool": "Oxlint complexity",
     "version": "1.80.0",

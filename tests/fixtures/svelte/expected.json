@@ -1,5 +1,4 @@
 {
-  "delta": 0,
   "reference": {
     "tool": "Oxlint complexity (scripts) and hand-derived (template)",
     "version": "1.80.0",
@@ -7,7 +6,9 @@
       {
         "function": "<template>",
         "line": 1,
-        "complexity": 11
+        "complexity": 11,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + five template blocks + five expression operators"
       },
       {
         "function": "trivial",
