@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked --all-targets
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo run -- check crates
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --locked --fail-under-lines 77
+
+  gitleaks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+
+  osv-scanner:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.5.1
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --lockfile=Cargo.lock

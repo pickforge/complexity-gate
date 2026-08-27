@@ -109,6 +109,9 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
   `if` each count. `with` adds depth but no complexity.
 - Dart: `switch` statements and switch expressions count each case; `??`, `??=`
   count; `?.` does not; cascade `..` does not.
+- Svelte: `tree-sitter-svelte-ng` 1.0.2 is compatible. It exposes template
+  expression contents as `svelte_raw_text`, so block structure comes from the
+  grammar and boolean/ternary classification scans only those expression nodes.
 - JS/TS: matches ESLint `complexity` rule semantics (including `??` and logical
   assignment); `max-depth` semantics for depth; `max-lines-per-function` with
   `skipBlankLines` + `skipComments` for lines.
