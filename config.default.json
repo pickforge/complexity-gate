@@ -1,0 +1,17 @@
+{
+  "limits": { "complexity": 15, "depth": 4, "lines": 100, "params": 6 },
+  "tests": {
+    "patterns": [
+      "**/*.test.*", "**/*.spec.*", "**/*_test.go", "**/test_*.py", "**/*_test.py",
+      "**/*_test.dart", "**/test/**", "**/tests/**", "**/__tests__/**"
+    ],
+    "exempt": ["lines"]
+  },
+  "ignore": [
+    "**/node_modules/**", "**/dist/**", "**/build/**", "**/target/**",
+    "**/.svelte-kit/**", "**/*.g.dart", "**/*.freezed.dart", "**/*.min.js",
+    "**/generated/**"
+  ],
+  "languages": {},
+  "hook": { "max_blocks": 3 }
+}
