@@ -34,7 +34,14 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
     }
     let output = Command::new("git")
         .current_dir(cwd)
-        .args(["diff", "--unified=0", "HEAD", "--"])
+        .args([
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "--unified=0",
+            "HEAD",
+            "--",
+        ])
         .output()
         .context("failed to execute git diff")?;
     if !output.status.success() {
@@ -103,6 +110,7 @@ fn diff_path(value: &str) -> Option<PathBuf> {
     if value == "/dev/null" {
         return None;
     }
+    let value = value.split('\t').next().unwrap_or(value);
     let path = value.split_once('/').map_or(value, |(_, path)| path);
     Some(PathBuf::from(path))
 }
@@ -129,7 +137,7 @@ mod tests {
 
     #[test]
     fn synthetic_hunks_use_post_image_and_skip_deletions() {
-        let diff = "diff --git c/a.rs w/a.rs\n--- c/a.rs\n+++ w/a.rs\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
+        let diff = "diff --git c/a.rs w/a.rs\n--- c/a.rs\n+++ w/a.rs\t\n@@ -2,2 +2,3 @@\n@@ -10,2 +11,0 @@\n@@ -20 +19 @@\n";
         let spans = parse_diff_hunks(diff);
         assert_eq!(
             spans[Path::new("a.rs")],
