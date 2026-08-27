@@ -79,7 +79,7 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    let text = String::from_utf8(output.stdout).context("git diff output was not UTF-8")?;
+    let text = String::from_utf8_lossy(&output.stdout);
     let mut changed = ChangedFiles {
         repo_root: repo_root.clone(),
         spans: parse_diff_hunks(&text),
@@ -128,7 +128,7 @@ fn git_command(cwd: &Path) -> Command {
 
 fn untracked(cwd: &Path) -> Result<Vec<PathBuf>> {
     let output = git_command(cwd)
-        .args(["ls-files", "--others", "-z"])
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
         .output()
         .context("failed to list untracked files")?;
     if !output.status.success() {

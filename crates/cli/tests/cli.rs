@@ -98,20 +98,22 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
     let child = command_output(&nested, &["check", "--changed"]);
     let root_text = String::from_utf8(root.stdout).unwrap();
     let child_text = String::from_utf8(child.stdout).unwrap();
-    for expected in ["top.js", "src/sub/x.js", "src/sub/new.js"] {
+    for expected in ["top.js", "src/sub/x.js"] {
         assert!(
             root_text.contains(expected),
             "missing {expected}; stdout: {root_text}; stderr: {}",
             String::from_utf8_lossy(&root.stderr)
         );
     }
-    for expected in ["../../top.js", "x.js", "new.js"] {
+    for expected in ["../../top.js", "x.js"] {
         assert!(
             child_text.contains(expected),
             "missing {expected}; stdout: {child_text}; stderr: {}",
             String::from_utf8_lossy(&child.stderr)
         );
     }
+    assert!(!root_text.contains("new.js"), "stdout: {root_text}");
+    assert!(!child_text.contains("new.js"), "stdout: {child_text}");
 }
 
 #[test]
@@ -162,6 +164,36 @@ fn changed_config_is_noted_in_text_and_json_reports() {
         report["notes"],
         serde_json::json!([".complexity-gate.json changed in this diff"])
     );
+}
+
+#[test]
+fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let file = dir.path().join("staged.js");
+    fs::write(&file, "function staged() { return 1; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&file, b"function staged() { return '\xff'; }\n").unwrap();
+    git(dir.path(), &["add", "staged.js"]);
+
+    let check = command_output(dir.path(), &["check", "--changed"]);
+    assert!(check.status.success(), "stderr: {}", String::from_utf8_lossy(&check.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&check.stdout),
+        "UNVERIFIED staged.js  not valid UTF-8\n"
+    );
+
+    let input = serde_json::json!({
+        "hook_event_name":"Stop", "session_id":"non-utf8", "cwd":dir.path()
+    })
+    .to_string();
+    let stop = hook_output(state.path(), &input);
+    assert!(stop.status.success(), "stderr: {}", String::from_utf8_lossy(&stop.stderr));
+    assert!(stop.stdout.is_empty());
 }
 
 #[test]
