@@ -45,7 +45,7 @@
         "line": 165,
         "complexity": 9,
         "delta": 3,
-        "delta_reason": "tree-sitter counts match arms, boolean operators, and let-else more strictly than lizard"
+        "delta_reason": "tree-sitter counts loop, let-else, and one match arm that lizard omits"
       },
       {
         "function": "review_cases",
