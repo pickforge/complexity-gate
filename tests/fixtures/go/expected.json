@@ -1,4 +1,5 @@
 {
+  "delta": 0,
   "reference": {
     "tool": "gocyclo",
     "version": "0.6.0",
@@ -47,6 +48,11 @@
         "function": "Counter.increment",
         "line": 179,
         "complexity": 2
+      },
+      {
+        "function": "reviewCases",
+        "line": 181,
+        "complexity": 5
       }
     ]
   },
@@ -128,6 +134,22 @@
       "line": 179,
       "complexity": 2,
       "depth": 1,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "reviewCases",
+      "line": 181,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 10,
+      "params": 3
+    },
+    {
+      "function": "<anonymous>",
+      "line": 188,
+      "complexity": 1,
+      "depth": 0,
       "lines": 1,
       "params": 1
     }

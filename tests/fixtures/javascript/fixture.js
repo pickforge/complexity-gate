@@ -177,3 +177,14 @@ function decisions(x) {
 class Counter {
   increment(x) { if (x) return x + 1; return 0; }
 }
+
+function reviewCases(values, x) {
+  const marker = "&& || ??";
+  if (x === 0) x++;
+  else if (x === 1) x++;
+  else if (x === 2) x++;
+  else x--;
+  try { x++; } catch (error) { x--; } finally { x += 0; }
+  values.map(value => value + marker.length);
+  return x;
+}

@@ -175,3 +175,15 @@ def decisions(x):
 class Counter:
     def increment(self, x):
         return x + 1 if x else 0
+
+def review_cases(values, x):
+    marker = "and or"
+    if x == 0: x += 1
+    elif x == 1: x += 1
+    elif x == 2: x += 1
+    else: x -= 1
+    try: x += 1
+    except ValueError: x -= 1
+    finally: x += 0
+    list(map(lambda value: value + len(marker), values))
+    return x

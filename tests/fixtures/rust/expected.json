@@ -1,4 +1,6 @@
 {
+  "delta": 3,
+  "delta_reason": "tree-sitter counts Rust loop, match arms, boolean operators, and let-else more strictly than lizard",
   "reference": {
     "tool": "lizard",
     "version": "1.24.0",
@@ -42,6 +44,11 @@
         "function": "decisions",
         "line": 165,
         "complexity": 9
+      },
+      {
+        "function": "review_cases",
+        "line": 177,
+        "complexity": 5
       }
     ]
   },
@@ -117,6 +124,22 @@
       "depth": 1,
       "lines": 11,
       "params": 2
+    },
+    {
+      "function": "review_cases",
+      "line": 177,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 10,
+      "params": 3
+    },
+    {
+      "function": "<anonymous>",
+      "line": 184,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
     }
   ]
 }

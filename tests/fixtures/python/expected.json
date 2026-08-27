@@ -1,4 +1,5 @@
 {
+  "delta": 0,
   "reference": {
     "tool": "radon cc -s",
     "version": "6.0.1",
@@ -47,6 +48,11 @@
         "function": "Counter.increment",
         "line": 176,
         "complexity": 2
+      },
+      {
+        "function": "review_cases",
+        "line": 179,
+        "complexity": 5
       }
     ]
   },
@@ -129,6 +135,22 @@
       "complexity": 2,
       "depth": 0,
       "lines": 2,
+      "params": 1
+    },
+    {
+      "function": "review_cases",
+      "line": 179,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 11,
+      "params": 2
+    },
+    {
+      "function": "<anonymous>",
+      "line": 188,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
       "params": 1
     }
   ]

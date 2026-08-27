@@ -1,4 +1,5 @@
 {
+  "delta": 0,
   "reference": {
     "tool": "Oxlint complexity (scripts) and hand-derived (template)",
     "version": "1.80.0",
@@ -57,6 +58,16 @@
         "function": "Counter.increment",
         "line": 179,
         "complexity": 2
+      },
+      {
+        "function": "reviewCases",
+        "line": 182,
+        "complexity": 5
+      },
+      {
+        "function": "<anonymous>",
+        "line": 189,
+        "complexity": 1
       }
     ]
   },
@@ -146,6 +157,22 @@
       "line": 179,
       "complexity": 2,
       "depth": 1,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "reviewCases",
+      "line": 182,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 10,
+      "params": 2
+    },
+    {
+      "function": "<anonymous>",
+      "line": 189,
+      "complexity": 1,
+      "depth": 0,
       "lines": 1,
       "params": 1
     }

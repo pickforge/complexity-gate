@@ -178,6 +178,17 @@ function decisions(x: number): number {
 class Counter {
   increment(x: number): number { if (x) return x + 1; return 0; }
 }
+
+function reviewCases(values: number[], x: number): number {
+  const marker = "&& || ??"; // operators inside strings add 0
+  if (x === 0) x++; // +1 if
+  else if (x === 1) x++; // +1 else-if
+  else if (x === 2) x++; // +1 else-if
+  else x--;
+  try { x++; } catch (error) { x--; } finally { x += 0; } // +1 catch
+  values.map(value => value + marker.length); // anonymous callback: base 1
+  return x;
+}
 </script>
 
 <!-- +1 template if -->

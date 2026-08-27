@@ -177,3 +177,14 @@ func decisions(x int, value any) int {
 
 type Counter struct{}
 func (Counter) increment(x int) int { if x > 0 { return x + 1 }; return 0 }
+
+func reviewCases(values []int, x int, err error) int {
+	marker := "&& ||"
+	if x == 0 { x++
+	} else if x == 1 { x++
+	} else if x == 2 { x++
+	} else { x-- }
+	if err != nil { x-- } // error-return equivalent of catch
+	apply(values, func(value int) int { return value + len(marker) })
+	return x
+}

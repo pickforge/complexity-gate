@@ -1,4 +1,5 @@
 {
+  "delta": 0,
   "reference": {
     "tool": "hand-derived",
     "version": "fixture comments",
@@ -52,6 +53,16 @@
         "function": "Counter.increment",
         "line": 180,
         "complexity": 2
+      },
+      {
+        "function": "reviewCases",
+        "line": 183,
+        "complexity": 5
+      },
+      {
+        "function": "<anonymous>",
+        "line": 190,
+        "complexity": 1
       }
     ]
   },
@@ -132,6 +143,22 @@
       "function": "Counter.increment",
       "line": 180,
       "complexity": 2,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "reviewCases",
+      "line": 183,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 10,
+      "params": 2
+    },
+    {
+      "function": "<anonymous>",
+      "line": 190,
+      "complexity": 1,
       "depth": 0,
       "lines": 1,
       "params": 1

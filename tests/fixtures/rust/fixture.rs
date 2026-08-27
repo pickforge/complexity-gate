@@ -173,3 +173,14 @@ fn decisions(mut x: i32, value: Option<i32>) -> i32 {
     let Some(v) = value else { return x; };
     x + v
 }
+
+fn review_cases(values: &[i32], mut x: i32, result: Result<(), ()>) -> i32 {
+    let marker = "&& ||";
+    if x == 0 { x += 1; }
+    else if x == 1 { x += 1; }
+    else if x == 2 { x += 1; }
+    else { x -= 1; }
+    if result.is_err() { x -= 1; } // Result error branch is the catch equivalent.
+    values.iter().map(|value| *value + marker.len() as i32).sum::<i32>();
+    x
+}

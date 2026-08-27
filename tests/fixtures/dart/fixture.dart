@@ -179,3 +179,14 @@ int decisions(int x, int? value) {
 class Counter {
   int increment(int x) => x > 0 ? x + 1 : 0; // +1 ternary
 }
+
+int reviewCases(List<int> values, int x) {
+  const marker = "&& || ??"; // operators inside strings add 0
+  if (x == 0) x++; // +1 if
+  else if (x == 1) x++; // +1 else-if
+  else if (x == 2) x++; // +1 else-if
+  else x--;
+  try { x++; } catch (_) { x--; } finally { x += 0; } // +1 catch
+  values.map((value) => value + marker.length); // anonymous callback: base 1
+  return x;
+}

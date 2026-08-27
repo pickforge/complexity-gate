@@ -9,6 +9,10 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct Golden {
+    #[serde(default)]
+    delta: usize,
+    #[serde(default)]
+    delta_reason: Option<String>,
     reference: Reference,
     functions: Vec<Expected>,
 }
@@ -38,18 +42,33 @@ struct Expected {
 }
 
 #[test]
-fn golden_fixtures_match_and_are_at_least_as_strict_as_references() {
+fn golden_fixtures_match_and_stay_within_reference_bounds() {
     for directory in fixture_directories() {
         let expected: Golden =
             serde_json::from_str(&fs::read_to_string(directory.join("expected.json")).unwrap())
                 .unwrap();
         assert!(!expected.reference.tool.is_empty() && !expected.reference.version.is_empty());
+        if expected.delta > 0 {
+            assert!(
+                expected
+                    .delta_reason
+                    .as_deref()
+                    .is_some_and(|reason| !reason.is_empty()),
+                "{} needs a reason for non-zero delta",
+                directory.display()
+            );
+        }
         let source_path = source_file(&directory);
         let source = fs::read_to_string(&source_path).unwrap();
         let actual = parse_source(Language::from_path(&source_path).unwrap(), &source).unwrap();
         let actual: Vec<_> = actual.into_iter().map(Expected::from).collect();
         assert_eq!(actual, expected.functions, "{}", directory.display());
-        assert_strictness(&actual, &expected.reference.functions, &directory);
+        assert_strictness(
+            &actual,
+            &expected.reference.functions,
+            expected.delta,
+            &directory,
+        );
     }
 }
 
@@ -72,7 +91,12 @@ fn source_file(directory: &Path) -> PathBuf {
         .unwrap()
 }
 
-fn assert_strictness(actual: &[Expected], references: &[ReferenceFunction], directory: &Path) {
+fn assert_strictness(
+    actual: &[Expected],
+    references: &[ReferenceFunction],
+    delta: usize,
+    directory: &Path,
+) {
     let ours: BTreeMap<_, _> = actual
         .iter()
         .map(|item| ((item.function.as_str(), item.line), item.complexity))
@@ -89,6 +113,13 @@ fn assert_strictness(actual: &[Expected], references: &[ReferenceFunction], dire
         assert!(
             *value >= reference.complexity,
             "ours {value} < reference {} for {:?} in {}",
+            reference.complexity,
+            key,
+            directory.display()
+        );
+        assert!(
+            *value <= reference.complexity + delta,
+            "ours {value} > reference {} + delta {delta} for {:?} in {}",
             reference.complexity,
             key,
             directory.display()
