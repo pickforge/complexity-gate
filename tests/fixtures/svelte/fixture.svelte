@@ -212,5 +212,6 @@ function commentLines(x: number): number {
 {/if}
 
 <p>{`s: ${ready && value}`}</p>
+<p>{a && b /* || */}</p>
 
 <style>.x { color: red; }</style>

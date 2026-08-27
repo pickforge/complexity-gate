@@ -6,9 +6,9 @@
       {
         "function": "<template>",
         "line": 1,
-        "complexity": 11,
+        "complexity": 12,
         "hand_derived": true,
-        "derivation": "base complexity 1 + five template blocks + five expression operators"
+        "derivation": "base complexity 1 + five template blocks + six expression operators"
       },
       {
         "function": "trivial",
@@ -81,7 +81,7 @@
     {
       "function": "<template>",
       "line": 1,
-      "complexity": 11,
+      "complexity": 12,
       "depth": 3,
       "lines": 0,
       "params": 0

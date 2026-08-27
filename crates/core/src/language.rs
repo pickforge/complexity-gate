@@ -931,6 +931,8 @@ enum MaskContext {
     Code(Option<usize>),
     Quote(u8),
     Template,
+    LineComment(Option<usize>),
+    BlockComment(Option<usize>),
 }
 
 fn mask_quoted_text(source: &str) -> String {
@@ -950,6 +952,12 @@ fn mask_quoted_text(source: &str) -> String {
                 mask_quote_byte(bytes[index], delimiter, &mut contexts)
             }
             MaskContext::Template => mask_template_byte(bytes, index, &mut contexts),
+            MaskContext::LineComment(depth) => {
+                mask_line_comment_byte(bytes[index], depth, &mut contexts)
+            }
+            MaskContext::BlockComment(depth) => {
+                mask_block_comment_byte(bytes, index, depth, &mut contexts)
+            }
         };
     }
     String::from_utf8(result).unwrap_or_default()
@@ -962,6 +970,14 @@ fn mask_code_byte(
     contexts: &mut Vec<MaskContext>,
     result: &mut [u8],
 ) -> usize {
+    if bytes[index..].starts_with(b"//") {
+        contexts.push(MaskContext::LineComment(depth));
+        return 2;
+    }
+    if bytes[index..].starts_with(b"/*") {
+        contexts.push(MaskContext::BlockComment(depth));
+        return 2;
+    }
     match bytes[index] {
         b'\'' | b'"' => {
             contexts.extend([MaskContext::Code(depth), MaskContext::Quote(bytes[index])]);
@@ -976,6 +992,34 @@ fn mask_code_byte(
         }
     }
     1
+}
+
+fn mask_line_comment_byte(
+    byte: u8,
+    depth: Option<usize>,
+    contexts: &mut Vec<MaskContext>,
+) -> usize {
+    if byte == b'\n' {
+        contexts.push(MaskContext::Code(depth));
+    } else {
+        contexts.push(MaskContext::LineComment(depth));
+    }
+    1
+}
+
+fn mask_block_comment_byte(
+    bytes: &[u8],
+    index: usize,
+    depth: Option<usize>,
+    contexts: &mut Vec<MaskContext>,
+) -> usize {
+    if bytes[index..].starts_with(b"*/") {
+        contexts.push(MaskContext::Code(depth));
+        2
+    } else {
+        contexts.push(MaskContext::BlockComment(depth));
+        1
+    }
 }
 
 fn mask_quote_byte(byte: u8, delimiter: u8, contexts: &mut Vec<MaskContext>) -> usize {
@@ -1075,6 +1119,12 @@ mod tests {
         assert_eq!(functions[0].function, "outer");
         assert_eq!(functions[1].function, "<anonymous>");
         assert_eq!(functions[1].params, 1);
+    }
+
+    #[test]
+    fn svelte_expression_comments_do_not_add_decisions() {
+        assert_eq!(expression_decisions("a && b /* || */"), 1);
+        assert_eq!(expression_decisions("a || b // && ??"), 1);
     }
 
     #[test]
