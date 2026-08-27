@@ -1,0 +1,194 @@
+{
+  "reference": {
+    "tool": "Oxlint complexity (scripts) and hand-derived (template)",
+    "version": "1.80.0",
+    "functions": [
+      {
+        "function": "<template>",
+        "line": 1,
+        "complexity": 12,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + five template blocks + six expression operators"
+      },
+      {
+        "function": "trivial",
+        "line": 2,
+        "complexity": 1
+      },
+      {
+        "function": "atLimit",
+        "line": 4,
+        "complexity": 15
+      },
+      {
+        "function": "overComplexity",
+        "line": 22,
+        "complexity": 16
+      },
+      {
+        "function": "overDepth",
+        "line": 41,
+        "complexity": 6
+      },
+      {
+        "function": "overLines",
+        "line": 54,
+        "complexity": 1
+      },
+      {
+        "function": "overParams",
+        "line": 157,
+        "complexity": 1
+      },
+      {
+        "function": "nested",
+        "line": 159,
+        "complexity": 1
+      },
+      {
+        "function": "inner",
+        "line": 160,
+        "complexity": 2
+      },
+      {
+        "function": "decisions",
+        "line": 164,
+        "complexity": 17
+      },
+      {
+        "function": "Counter.increment",
+        "line": 179,
+        "complexity": 2
+      },
+      {
+        "function": "reviewCases",
+        "line": 182,
+        "complexity": 5
+      },
+      {
+        "function": "<anonymous>",
+        "line": 189,
+        "complexity": 1
+      },
+      {
+        "function": "commentLines",
+        "line": 193,
+        "complexity": 1
+      }
+    ]
+  },
+  "functions": [
+    {
+      "function": "<template>",
+      "line": 1,
+      "complexity": 12,
+      "depth": 3,
+      "lines": 0,
+      "params": 0
+    },
+    {
+      "function": "trivial",
+      "line": 2,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "atLimit",
+      "line": 4,
+      "complexity": 15,
+      "depth": 1,
+      "lines": 17,
+      "params": 1
+    },
+    {
+      "function": "overComplexity",
+      "line": 22,
+      "complexity": 16,
+      "depth": 1,
+      "lines": 18,
+      "params": 1
+    },
+    {
+      "function": "overDepth",
+      "line": 41,
+      "complexity": 6,
+      "depth": 5,
+      "lines": 12,
+      "params": 1
+    },
+    {
+      "function": "overLines",
+      "line": 54,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 102,
+      "params": 1
+    },
+    {
+      "function": "overParams",
+      "line": 157,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 7
+    },
+    {
+      "function": "nested",
+      "line": 159,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 4,
+      "params": 1
+    },
+    {
+      "function": "inner",
+      "line": 160,
+      "complexity": 2,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "decisions",
+      "line": 164,
+      "complexity": 17,
+      "depth": 1,
+      "lines": 13,
+      "params": 1
+    },
+    {
+      "function": "Counter.increment",
+      "line": 179,
+      "complexity": 2,
+      "depth": 1,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "reviewCases",
+      "line": 182,
+      "complexity": 5,
+      "depth": 1,
+      "lines": 10,
+      "params": 2
+    },
+    {
+      "function": "<anonymous>",
+      "line": 189,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "commentLines",
+      "line": 193,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1
+    }
+  ]
+}
