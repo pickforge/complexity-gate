@@ -103,7 +103,12 @@ fn run_check(
         changed: changes.as_ref(),
     })?;
     match format {
-        Format::Text => print_text(&result),
+        Format::Text => {
+            for note in &result.notes {
+                eprintln!("note: {note}");
+            }
+            print_text(&result);
+        }
         Format::Json => print_json(&result)?,
     }
     Ok(u8::from(!result.violations.is_empty()))
@@ -132,6 +137,7 @@ struct JsonReport<'a> {
     checked: usize,
     violations: &'a [complexity_gate_core::Violation],
     unverified: &'a [complexity_gate_core::Unverified],
+    notes: &'a [String],
 }
 
 fn print_json(result: &complexity_gate_core::ScanResult) -> Result<()> {
@@ -140,6 +146,7 @@ fn print_json(result: &complexity_gate_core::ScanResult) -> Result<()> {
         checked: result.checked,
         violations: &result.violations,
         unverified: &result.unverified,
+        notes: &result.notes,
     };
     println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())

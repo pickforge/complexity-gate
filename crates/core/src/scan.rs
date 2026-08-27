@@ -39,6 +39,7 @@ pub struct ScanResult {
     pub checked: usize,
     pub violations: Vec<Violation>,
     pub unverified: Vec<Unverified>,
+    pub notes: Vec<String>,
     pub functions: Vec<(PathBuf, FunctionMetrics)>,
 }
 
@@ -64,6 +65,11 @@ pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
         collect_files(&roots, &match_base, &base_config)?
     };
     let mut result = ScanResult::default();
+    if options.changed.is_some_and(config_changed) {
+        result
+            .notes
+            .push(".complexity-gate.json changed in this diff".to_owned());
+    }
     for file in files {
         scan_file(&file, &match_base, options, &mut result)?;
     }
@@ -127,6 +133,14 @@ fn nearest_project_root(start: &Path) -> Option<PathBuf> {
         .ancestors()
         .find(|directory| directory.join(".complexity-gate.json").is_file())
         .map(Path::to_path_buf)
+}
+
+fn config_changed(changed: &ChangedFiles) -> bool {
+    !changed.fallback
+        && changed.spans.keys().chain(&changed.untracked).any(|path| {
+            path.file_name()
+                .is_some_and(|name| name == ".complexity-gate.json")
+        })
 }
 
 fn collect_changed_files(

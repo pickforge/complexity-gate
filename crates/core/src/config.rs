@@ -79,8 +79,9 @@ pub fn load_config(start: &Path, explicit: Option<&Path>) -> Result<ConfigResolu
         merge_file(&mut value, &path)?;
         chain.push(path);
     }
-    let config = serde_json::from_value(value).context("invalid configuration")?;
+    let mut config: Config = serde_json::from_value(value).context("invalid configuration")?;
     validate_languages(&config)?;
+    config.hook.max_blocks = config.hook.max_blocks.max(1);
     Ok(ConfigResolution { config, chain })
 }
 
@@ -144,6 +145,7 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
         path,
     )?;
     nested_keys(object, "tests", &["patterns", "exempt"], path)?;
+    validate_test_exempt(object, path)?;
     nested_keys(object, "hook", &["max_blocks"], path)?;
     validate_language_keys(object, path)
 }
@@ -154,6 +156,27 @@ fn nested_keys(root: &Map<String, Value>, key: &str, keys: &[&str], path: &Path)
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("{key} in {} must be an object", path.display()))?;
         allowed(object, keys, key, path)?;
+    }
+    Ok(())
+}
+
+fn validate_test_exempt(root: &Map<String, Value>, path: &Path) -> Result<()> {
+    let Some(exempt) = root
+        .get("tests")
+        .and_then(Value::as_object)
+        .and_then(|tests| tests.get("exempt"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(());
+    };
+    for value in exempt {
+        if value.as_str() != Some("lines") {
+            bail!(
+                "unsupported tests.exempt key `{}` in {}",
+                value.as_str().unwrap_or("<non-string>"),
+                path.display()
+            );
+        }
     }
     Ok(())
 }
@@ -265,6 +288,26 @@ mod tests {
         let limits = config.limits_for("rust");
         assert_eq!(limits.complexity, 4);
         assert_eq!(limits.depth, 4);
+    }
+
+    #[test]
+    fn test_exempt_rejects_metrics_other_than_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"tests":{"exempt":["depth"]}}"#).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("tests.exempt") && error.contains("depth"));
+    }
+
+    #[test]
+    fn hook_max_blocks_is_clamped_to_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"hook":{"max_blocks":0}}"#).unwrap();
+        let config = load_config(dir.path(), Some(&path)).unwrap().config;
+        assert_eq!(config.hook.max_blocks, 1);
     }
 
     #[test]

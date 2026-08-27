@@ -44,6 +44,16 @@ fn check_exit_codes_follow_contract() {
             .code(),
         Some(2)
     );
+    fs::write(
+        dir.path().join("config.json"),
+        r#"{"tests":{"exempt":["depth"]}}"#,
+    )
+    .unwrap();
+    let invalid_exempt =
+        command_output(dir.path(), &["check", "--config", "config.json", "bad.js"]);
+    assert_eq!(invalid_exempt.status.code(), Some(2));
+    let error = String::from_utf8_lossy(&invalid_exempt.stderr);
+    assert!(error.contains("tests.exempt") && error.contains("depth"));
     assert_eq!(
         binary()
             .current_dir(dir.path())
@@ -102,6 +112,31 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
             String::from_utf8_lossy(&child.stderr)
         );
     }
+}
+
+#[test]
+fn changed_config_is_noted_in_text_and_json_reports() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join(".complexity-gate.json");
+    fs::write(&config, r#"{"limits":{"depth":4}}"#).unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&config, r#"{"limits":{"depth":3}}"#).unwrap();
+
+    let text = command_output(dir.path(), &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&text.stderr)
+            .contains("note: .complexity-gate.json changed in this diff")
+    );
+    let json = command_output(dir.path(), &["check", "--changed", "--format", "json"]);
+    let report: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(
+        report["notes"],
+        serde_json::json!([".complexity-gate.json changed in this diff"])
+    );
 }
 
 #[test]
