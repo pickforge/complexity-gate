@@ -124,7 +124,7 @@
       "function": "decisions",
       "line": 163,
       "complexity": 17,
-      "depth": 2,
+      "depth": 1,
       "lines": 13,
       "params": 1
     },

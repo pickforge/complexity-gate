@@ -46,7 +46,7 @@
       {
         "function": "decisions",
         "line": 163,
-        "complexity": 18
+        "complexity": 17
       },
       {
         "function": "Counter.increment",
@@ -123,8 +123,8 @@
     {
       "function": "decisions",
       "line": 163,
-      "complexity": 18,
-      "depth": 2,
+      "complexity": 17,
+      "depth": 1,
       "lines": 15,
       "params": 2
     },

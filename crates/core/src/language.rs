@@ -423,9 +423,9 @@ fn dart_decision(node: Node<'_>, source: &str) -> bool {
         | "while_statement"
         | "do_statement"
         | "switch_statement_case"
-        | "switch_expression_case"
         | "catch_clause"
         | "conditional_expression" => true,
+        "switch_expression_case" => !is_default_arm(node, source),
         "logical_and_expression" | "logical_or_expression" | "if_null_expression" => true,
         "assignment_expression" => has_operator(node, source, &["??="]),
         _ => false,
@@ -468,17 +468,24 @@ fn go_decision(node: Node<'_>, source: &str) -> bool {
 }
 
 fn has_operator(node: Node<'_>, source: &str, wanted: &[&str]) -> bool {
-    node.child_by_field_name("operator")
-        .and_then(|item| item.utf8_text(source.as_bytes()).ok())
-        .is_some_and(|operator| wanted.contains(&operator))
-        || wanted
-            .iter()
-            .any(|operator| node_text(node, source).contains(operator))
+    if let Some(operator) = node.child_by_field_name("operator") {
+        return wanted.contains(&node_text(operator, source));
+    }
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .filter(|child| !child.is_named())
+        .any(|child| wanted.contains(&node_text(child, source)))
 }
 
 fn is_default_arm(node: Node<'_>, source: &str) -> bool {
-    let text = node_text(node, source).trim_start();
-    text.starts_with("_") || text.starts_with("case _") || text.starts_with("default")
+    if node_text(node, source).trim_start().starts_with("default") {
+        return true;
+    }
+    let pattern = node.child_by_field_name("pattern").or_else(|| {
+        let mut cursor = node.walk();
+        node.named_children(&mut cursor).next()
+    });
+    pattern.is_some_and(|pattern| node_text(pattern, source).trim() == "_")
 }
 
 fn opens_depth(node: Node<'_>, language: Language) -> bool {
@@ -492,7 +499,6 @@ fn opens_depth(node: Node<'_>, language: Language) -> bool {
                 | "do_statement"
                 | "switch_statement"
                 | "try_statement"
-                | "catch_clause"
         ),
         Language::Dart => matches!(
             node.kind(),
@@ -503,7 +509,6 @@ fn opens_depth(node: Node<'_>, language: Language) -> bool {
                 | "switch_statement"
                 | "switch_expression"
                 | "try_statement"
-                | "catch_clause"
         ),
         Language::Rust => matches!(
             node.kind(),
@@ -520,7 +525,6 @@ fn opens_depth(node: Node<'_>, language: Language) -> bool {
                 | "while_statement"
                 | "match_statement"
                 | "try_statement"
-                | "except_clause"
                 | "with_statement"
         ),
         Language::Go => matches!(
@@ -538,37 +542,45 @@ fn opens_depth(node: Node<'_>, language: Language) -> bool {
 fn is_else_if(node: Node<'_>, language: Language) -> bool {
     if !matches!(
         language,
-        Language::JavaScript | Language::TypeScript | Language::Tsx | Language::Dart | Language::Go
+        Language::JavaScript
+            | Language::TypeScript
+            | Language::Tsx
+            | Language::Dart
+            | Language::Rust
+            | Language::Go
     ) {
         return false;
     }
     let Some(parent) = node.parent() else {
         return false;
     };
-    parent.kind() == "if_statement"
-        && parent
+    if matches!(parent.kind(), "if_statement" | "if_expression") {
+        return parent
             .child_by_field_name("alternative")
-            .is_some_and(|item| item.id() == node.id())
+            .is_some_and(|item| item.id() == node.id());
+    }
+    parent.kind() == "else_clause"
+        && parent
+            .parent()
+            .is_some_and(|item| matches!(item.kind(), "if_statement" | "if_expression"))
 }
 
 fn function_name(node: Node<'_>, language: Language, source: &str) -> String {
     if let Some(name) = direct_name(node, source) {
         return qualify_method(node, language, name, source);
     }
-    let mut parent = node.parent();
-    while let Some(item) = parent {
-        if matches!(item.kind(), "local_function_declaration")
-            && let Some(name) = direct_name(item, source)
-        {
-            return name.to_owned();
-        }
-        if let Some(name) = binding_name(item, source) {
-            return name;
-        }
+    let mut child = node;
+    while let Some(item) = child.parent() {
         if is_function(language, item.kind()) {
             break;
         }
-        parent = item.parent();
+        if let Some(name) = binding_name(item, child, source) {
+            return name;
+        }
+        if !binding_wrapper(item.kind()) {
+            break;
+        }
+        child = item;
     }
     "<anonymous>".to_owned()
 }
@@ -678,16 +690,26 @@ fn receiver_type(node: Node<'_>, source: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
-fn binding_name<'a>(node: Node<'a>, source: &'a str) -> Option<String> {
-    for field in ["name", "left", "key", "pattern"] {
-        if let Some(name) = node.child_by_field_name(field) {
-            let text = name.utf8_text(source.as_bytes()).ok()?.trim();
-            if !text.is_empty() && !text.contains([' ', '\n']) {
-                return Some(text.to_owned());
-            }
-        }
+fn binding_name(node: Node<'_>, value: Node<'_>, source: &str) -> Option<String> {
+    let (name_field, value_field) = match node.kind() {
+        "variable_declarator" | "initialized_variable_definition" => ("name", "value"),
+        "let_declaration" => ("pattern", "value"),
+        "pair" => ("key", "value"),
+        "assignment_expression" | "assignment_statement" => ("left", "right"),
+        "short_var_declaration" => ("left", "right"),
+        _ => return None,
+    };
+    let assigned = node.child_by_field_name(value_field)?;
+    if assigned.id() != value.id() {
+        return None;
     }
-    None
+    let name = node.child_by_field_name(name_field)?;
+    let text = node_text(name, source).trim();
+    (!text.is_empty() && !text.contains([' ', '\n'])).then(|| text.to_owned())
+}
+
+fn binding_wrapper(kind: &str) -> bool {
+    matches!(kind, "parenthesized_expression" | "expression_list")
 }
 
 fn parameter_count(node: Node<'_>, language: Language, source: &str) -> usize {
@@ -695,9 +717,7 @@ fn parameter_count(node: Node<'_>, language: Language, source: &str) -> usize {
         .child_by_field_name("parameters")
         .or_else(|| descendant_field(node, "parameters"));
     let Some(params) = params else {
-        return usize::from(
-            node.kind() == "lambda" && node.child_by_field_name("parameters").is_some(),
-        );
+        return usize::from(node.child_by_field_name("parameter").is_some());
     };
     let mut cursor = params.walk();
     let children: Vec<_> = params.named_children(&mut cursor).collect();
@@ -873,7 +893,8 @@ fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut S
 }
 
 fn expression_decisions(line: &str) -> usize {
-    let bytes = line.as_bytes();
+    let code = mask_quoted_text(line);
+    let bytes = code.as_bytes();
     let pairs = bytes
         .windows(2)
         .filter(|pair| matches!(*pair, b"&&" | b"||" | b"??"))
@@ -894,6 +915,28 @@ fn expression_decisions(line: &str) -> usize {
     pairs + ternary
 }
 
+fn mask_quoted_text(source: &str) -> String {
+    let mut result = source.as_bytes().to_vec();
+    let mut quote = None;
+    let mut escaped = false;
+    for byte in &mut result {
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if *byte == b'\\' {
+                escaped = true;
+            } else if *byte == delimiter {
+                quote = None;
+            }
+            *byte = b' ';
+        } else if matches!(*byte, b'\'' | b'"' | b'`') {
+            quote = Some(*byte);
+            *byte = b' ';
+        }
+    }
+    String::from_utf8(result).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -903,5 +946,68 @@ mod tests {
         for (language, kinds) in coverage_unknowns() {
             assert!(kinds.is_empty(), "{language}: {}", kinds.join(", "));
         }
+    }
+
+    #[test]
+    fn operators_use_grammar_tokens_only() {
+        let functions = parse_source(
+            Language::JavaScript,
+            "function nested(a,b,c){ return (a && b) + c; }\nfunction text(a){ return a + '||'; }",
+        )
+        .unwrap();
+        assert_eq!(functions[0].complexity, 2);
+        assert_eq!(functions[1].complexity, 1);
+    }
+
+    #[test]
+    fn else_if_chains_and_try_handlers_share_depth() {
+        let javascript = parse_source(
+            Language::JavaScript,
+            "function chain(x){ if(x===1){} else if(x===2){} else if(x===3){} else{} try{}catch(e){} }",
+        )
+        .unwrap();
+        let rust = parse_source(
+            Language::Rust,
+            "fn chain(x:u8){ if x==1 {} else if x==2 {} else if x==3 {} else {} }",
+        )
+        .unwrap();
+        let python = parse_source(
+            Language::Python,
+            "def guarded():\n    try:\n        pass\n    except Exception:\n        pass\n    finally:\n        pass\n",
+        )
+        .unwrap();
+        assert_eq!((javascript[0].complexity, javascript[0].depth), (5, 1));
+        assert_eq!((rust[0].complexity, rust[0].depth), (4, 1));
+        assert_eq!(python[0].depth, 1);
+    }
+
+    #[test]
+    fn callbacks_are_anonymous_and_single_arrow_parameter_counts() {
+        let functions = parse_source(
+            Language::JavaScript,
+            "function outer(list){ const mapped = list.map(x => x + 1); return mapped; }",
+        )
+        .unwrap();
+        assert_eq!(functions[0].function, "outer");
+        assert_eq!(functions[1].function, "<anonymous>");
+        assert_eq!(functions[1].params, 1);
+    }
+
+    #[test]
+    fn wildcard_arms_and_svelte_strings_are_exact() {
+        let dart = parse_source(
+            Language::Dart,
+            "int choose(int x) => switch (x) { 1 => 1, _ => 0 };",
+        )
+        .unwrap();
+        let rust = parse_source(
+            Language::Rust,
+            "fn choose(x:u8)->u8 { match x { 0 => 1, _unused => 2 } }",
+        )
+        .unwrap();
+        let svelte = parse_source(Language::Svelte, "<p>{\"question? && ||\"}</p>").unwrap();
+        assert_eq!(dart[0].complexity, 2);
+        assert_eq!(rust[0].complexity, 3);
+        assert_eq!(svelte[0].complexity, 1);
     }
 }
