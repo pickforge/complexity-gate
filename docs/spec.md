@@ -24,7 +24,7 @@ in the PR, not decided silently.
 |---|---|---|
 | `complexity` | cyclomatic: `1 + decision points` in the function body, excluding nested functions | 15 |
 | `depth` | max nesting of control-flow constructs (see below), nested functions reset to 0 | 4 |
-| `lines` | lines from the function's first to last line inclusive, minus blank lines and comment-only lines; nested functions included | 100 |
+| `lines` | lines from the function's first to last line inclusive, minus blank lines and comment-only lines (every non-whitespace byte inside comment nodes); nested functions included | 100 |
 | `params` | declared parameters; a destructuring pattern counts as 1; receiver/`self`/`this` excluded | 6 |
 
 A violation is `value > limit`. Test files (see config) are exempt from `lines`
@@ -141,6 +141,11 @@ complexity-gate --version
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
   falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
+  The changed file set comes straight from Git (diff + untracked); it is not
+  filtered by `.gitignore`, only by config `ignore`. Git is invoked with
+  `--no-ext-diff --no-textconv`, external diff, textconv, fsmonitor, and hooks
+  disabled, and `GIT_DIR`/`GIT_WORK_TREE`/`GIT_EXTERNAL_DIFF`/`GIT_CONFIG_*`
+  removed from its environment.
 - `--changed` and explicit `paths` together: intersection (changed functions within
   those paths).
 - Output `text` (default), one line per violation, sorted by file then line:
@@ -229,7 +234,8 @@ Resolution, later wins, shallow merge per top-level key:
 1. built-in defaults (`config.default.json`, embedded)
 2. user: `$XDG_CONFIG_HOME/complexity-gate/config.json` (default `~/.config/complexity-gate/config.json`)
 3. repo: nearest `.complexity-gate.json` walking up from the checked file's
-   directory (or from cwd for `--changed`)
+   directory — always per file, also under `--changed`, so nested packages can
+   carry their own limits
 4. `--config <path>` replaces step 3
 
 ```json
@@ -250,7 +256,11 @@ Resolution, later wins, shallow merge per top-level key:
 ```
 
 `tests.patterns` and `ignore` globs match paths relative to the Git repository
-root (or to the scan root outside Git), never to the process cwd.
+root (or to the common scan root outside Git), never to the process cwd.
+`tests.exempt` accepts only `lines`; `hook.max_blocks` is clamped to at least 1.
+A repo config is trusted like any repo file. Under `--changed`, when a
+`.complexity-gate.json` is itself among the changed files the report starts with
+`note: .complexity-gate.json changed in this diff` so a reviewer sees it.
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
@@ -272,10 +282,14 @@ and (Svelte) a template with nested blocks.
 
 Reference numbers are derived once from the reference tool and recorded in the
 fixture's `expected.json` under `reference` with the tool name and version:
-ESLint `complexity` for JS/TS, `radon` for Python, `gocyclo` for Go, `lizard`
-for Rust, hand-derived with a per-line comment for Dart and Svelte templates. A
+ESLint or Oxlint `complexity` for JS/TS/TSX and Svelte scripts (the same rule
+implementation; either is accepted, record which), `radon` for Python, `gocyclo`
+for Go, `lizard` for Rust, hand-derived with a per-line comment for Dart and
+Svelte templates. Every function in `expected.json` has a reference entry; when
+the reference tool does not report a function (nested or anonymous), the entry
+is marked `hand_derived` with its derivation. A
 test asserts `reference <= ours <= reference + delta` for complexity on every
-fixture, where `delta` is recorded per fixture in `expected.json` with the reason
+fixture, where `delta` is recorded per function in the reference entry with the reason
 (default 0), plus exact equality with our own committed expectations. Every
 language fixture includes a multi-branch `else if` chain, a `try`/`catch`, an
 operator inside a string literal, and an anonymous callback inside a named
