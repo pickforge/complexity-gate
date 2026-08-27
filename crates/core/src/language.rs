@@ -893,3 +893,15 @@ fn expression_decisions(line: &str) -> usize {
         .count();
     pairs + ternary
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn current_grammars_have_no_unclassified_control_flow_candidates() {
+        for (language, kinds) in coverage_unknowns() {
+            assert!(kinds.is_empty(), "{language}: {}", kinds.join(", "));
+        }
+    }
+}
