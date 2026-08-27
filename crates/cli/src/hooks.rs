@@ -92,7 +92,9 @@ fn report_post_edit(input: &HookInput, paths: &[PathBuf]) -> Result<()> {
 }
 
 fn report_post_changed(input: &HookInput) -> Result<()> {
-    let changes = changed_files(&input.cwd)?;
+    let Some(changes) = repo_changes(&input.cwd)? else {
+        return Ok(());
+    };
     let result = scan(&ScanOptions {
         cwd: &input.cwd,
         paths: &[],
@@ -106,7 +108,10 @@ fn report_post_changed(input: &HookInput) -> Result<()> {
 }
 
 fn report_stop(input: &HookInput) -> Result<()> {
-    let changes = changed_files(&input.cwd)?;
+    let Some(changes) = repo_changes(&input.cwd)? else {
+        reset_counter(&input.session_id)?;
+        return Ok(());
+    };
     let result = scan(&ScanOptions {
         cwd: &input.cwd,
         paths: &[],
@@ -126,6 +131,21 @@ fn report_stop(input: &HookInput) -> Result<()> {
     emit_block(&format!(
         "{report}\nRefactor the listed functions (see the complexity-gate skill), then finish."
     ))
+}
+
+/// Hooks gate only the diff of the repository around `cwd`. Outside a Git
+/// repository (or with no `HEAD`) there is nothing to diff, so hooks pass
+/// instead of scanning the whole tree the way the CLI fallback does.
+fn repo_changes(cwd: &Path) -> Result<Option<complexity_gate_core::ChangedFiles>> {
+    let changes = changed_files(cwd)?;
+    if changes.fallback {
+        eprintln!(
+            "note: hook skipped: {} is not inside a Git repository with HEAD",
+            cwd.display()
+        );
+        return Ok(None);
+    }
+    Ok(Some(changes))
 }
 
 fn emit_block(reason: &str) -> Result<()> {

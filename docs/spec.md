@@ -141,6 +141,10 @@ complexity-gate --version
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
   falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
+  Hook mode (`hook claude|codex`) does not fall back: outside a Git repository
+  it prints a `note: hook skipped` line, emits no block, and a Stop resets the
+  loop counter, so a session running from a non-repo cwd is never gated on the
+  whole tree.
   The changed file set comes straight from Git: `git diff HEAD` post-image paths
   (which already include tracked files that a later `.gitignore` rule covers)
   plus untracked files from `git ls-files --others --exclude-standard`; config

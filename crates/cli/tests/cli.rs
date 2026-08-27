@@ -183,8 +183,16 @@ fn changed_ignored_paths_are_filtered_before_language_lookup() {
     fs::write(dir.path().join("target/Foo.kt"), "fun changed() = 2\n").unwrap();
 
     let output = command_output(dir.path(), &["check", "--changed"]);
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.stdout.is_empty(), "stdout: {}", String::from_utf8_lossy(&output.stdout));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 }
 
 #[test]
@@ -202,7 +210,11 @@ fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
     git(dir.path(), &["add", "staged.js"]);
 
     let check = command_output(dir.path(), &["check", "--changed"]);
-    assert!(check.status.success(), "stderr: {}", String::from_utf8_lossy(&check.stderr));
+    assert!(
+        check.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&check.stderr)
+    );
     assert_eq!(
         String::from_utf8_lossy(&check.stdout),
         "UNVERIFIED staged.js  not valid UTF-8\n"
@@ -213,7 +225,11 @@ fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
     })
     .to_string();
     let stop = hook_output(state.path(), &input);
-    assert!(stop.status.success(), "stderr: {}", String::from_utf8_lossy(&stop.stderr));
+    assert!(
+        stop.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&stop.stderr)
+    );
     assert!(stop.stdout.is_empty());
 }
 
@@ -387,4 +403,25 @@ fn complex_function() -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!("function bad(x) {{\n{decisions}\nreturn x;\n}}\n")
+}
+
+#[test]
+fn stop_hook_outside_git_repository_passes_without_scanning() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("bad.js"),
+        "function bad(x) { if (x) { if (x > 1) { if (x > 2) { if (x > 3) { if (x > 4) { return 1; } } } } } return 0; }\n",
+    )
+    .unwrap();
+    let input = serde_json::json!({
+        "hook_event_name":"Stop", "session_id":"no/repo", "cwd":dir.path()
+    })
+    .to_string();
+
+    let output = hook_output(state.path(), &input);
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("note: hook skipped"));
+    assert!(!state.path().join("no_repo.count").exists());
 }
