@@ -67,36 +67,41 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
         r#"{"limits":{"depth":0}}"#,
     )
     .unwrap();
+    let top = dir.path().join("top.js");
     let tracked = nested.join("x.js");
+    fs::write(&top, "function top() { return 1; }\n").unwrap();
     fs::write(&tracked, "function tracked() { return 1; }\n").unwrap();
     git(dir.path(), &["init", "-q"]);
     git(dir.path(), &["config", "user.email", "test@example.com"]);
     git(dir.path(), &["config", "user.name", "Test"]);
     git(dir.path(), &["add", "."]);
     git(dir.path(), &["commit", "-qm", "initial"]);
-    let complex = "function tracked(x) { if (x) return 1; return 0; }\n";
+    let complex = "function changed(x) { if (x) return 1; return 0; }\n";
+    fs::write(&top, complex).unwrap();
     fs::write(&tracked, complex).unwrap();
-    fs::write(
-        nested.join("new.js"),
-        "function fresh(x) { if (x) return 1; return 0; }\n",
-    )
-    .unwrap();
+    fs::write(nested.join("new.js"), complex).unwrap();
+    fs::write(dir.path().join(".gitignore"), "src/\n").unwrap();
     git(dir.path(), &["config", "diff.noprefix", "true"]);
+    git(dir.path(), &["config", "diff.external", "/bin/false"]);
 
     let root = command_output(dir.path(), &["check", "--changed"]);
     let child = command_output(&nested, &["check", "--changed"]);
     let root_text = String::from_utf8(root.stdout).unwrap();
     let child_text = String::from_utf8(child.stdout).unwrap();
-    assert!(
-        root_text.contains("src/sub/x.js") && root_text.contains("src/sub/new.js"),
-        "root stdout: {root_text}; stderr: {}",
-        String::from_utf8_lossy(&root.stderr)
-    );
-    assert!(
-        child_text.contains("x.js") && child_text.contains("new.js"),
-        "child stdout: {child_text}; stderr: {}",
-        String::from_utf8_lossy(&child.stderr)
-    );
+    for expected in ["top.js", "src/sub/x.js", "src/sub/new.js"] {
+        assert!(
+            root_text.contains(expected),
+            "missing {expected}; stdout: {root_text}; stderr: {}",
+            String::from_utf8_lossy(&root.stderr)
+        );
+    }
+    for expected in ["../../top.js", "x.js", "new.js"] {
+        assert!(
+            child_text.contains(expected),
+            "missing {expected}; stdout: {child_text}; stderr: {}",
+            String::from_utf8_lossy(&child.stderr)
+        );
+    }
 }
 
 #[test]
@@ -129,6 +134,26 @@ fn test_patterns_and_ignores_use_repository_relative_paths() {
         let output = command_output(&tests, &paths);
         assert!(output.status.success());
         assert!(output.stdout.is_empty());
+    }
+}
+
+#[test]
+fn test_patterns_use_the_common_scan_root_outside_git() {
+    let dir = tempfile::tempdir().unwrap();
+    let nog = dir.path().join("nog");
+    let tests = nog.join("test");
+    fs::create_dir_all(&tests).unwrap();
+    let long = format!("function big() {{\n{}\n}}\n", "return 1;\n".repeat(101));
+    fs::write(tests.join("b.js"), long).unwrap();
+
+    for (cwd, path) in [(&nog, "test/b.js"), (&tests, "b.js")] {
+        let output = command_output(cwd, &["check", path]);
+        assert!(
+            output.status.success() && output.stdout.is_empty(),
+            "stdout: {}; stderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 

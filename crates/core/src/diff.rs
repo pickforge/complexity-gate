@@ -6,6 +6,16 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 
+const REMOVED_GIT_ENV: &[&str] = &[
+    "GIT_EXTERNAL_DIFF",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_COUNT",
+];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LineRange {
     pub start: usize,
@@ -41,8 +51,7 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
             ..ChangedFiles::default()
         });
     }
-    let output = Command::new("git")
-        .current_dir(&repo_root)
+    let output = git_command(&repo_root)
         .args([
             "-c",
             "core.quotePath=false",
@@ -55,6 +64,8 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
             "-c",
             "diff.dstPrefix=b/",
             "diff",
+            "--no-ext-diff",
+            "--no-textconv",
             "--no-color",
             "--unified=0",
             "HEAD",
@@ -79,8 +90,7 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
 }
 
 pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
-    let output = Command::new("git")
-        .current_dir(cwd)
+    let output = git_command(cwd)
         .args(["rev-parse", "--show-toplevel"])
         .output()
         .context("failed to locate Git repository root")?;
@@ -92,17 +102,33 @@ pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn git_ok(cwd: &Path, args: &[&str]) -> bool {
-    Command::new("git")
-        .current_dir(cwd)
+    git_command(cwd)
         .args(args)
         .output()
         .is_ok_and(|output| output.status.success())
 }
 
+fn git_command(cwd: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.current_dir(cwd).arg("--no-pager").args([
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.useBuiltinFSMonitor=false",
+        "-c",
+        "diff.external=",
+        "-c",
+        "core.hooksPath=/dev/null",
+    ]);
+    for name in REMOVED_GIT_ENV {
+        command.env_remove(name);
+    }
+    command
+}
+
 fn untracked(cwd: &Path) -> Result<Vec<PathBuf>> {
-    let output = Command::new("git")
-        .current_dir(cwd)
-        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+    let output = git_command(cwd)
+        .args(["ls-files", "--others", "-z"])
         .output()
         .context("failed to list untracked files")?;
     if !output.status.success() {
@@ -122,6 +148,9 @@ pub fn parse_diff_hunks(diff: &str) -> BTreeMap<PathBuf, Vec<LineRange>> {
     for line in diff.lines() {
         if let Some(path) = line.strip_prefix("+++ ") {
             file = diff_path(path);
+            if let Some(path) = &file {
+                result.entry(path.clone()).or_insert_with(Vec::new);
+            }
             continue;
         }
         if !line.starts_with("@@") {

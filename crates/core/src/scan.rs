@@ -56,9 +56,13 @@ struct ScanFile {
 
 pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
     let roots = scan_roots(options);
-    let match_base = match_base(options)?;
-    let base_config = load_config(options.cwd, options.explicit_config)?.config;
-    let files = collect_files(&roots, &match_base, &base_config)?;
+    let match_base = match_base(options, &roots)?;
+    let files = if let Some(changed) = options.changed.filter(|changed| !changed.fallback) {
+        collect_changed_files(changed, &roots, !options.paths.is_empty())?
+    } else {
+        let base_config = load_config(options.cwd, options.explicit_config)?.config;
+        collect_files(&roots, &match_base, &base_config)?
+    };
     let mut result = ScanResult::default();
     for file in files {
         scan_file(&file, &match_base, options, &mut result)?;
@@ -85,13 +89,37 @@ fn scan_roots(options: &ScanOptions<'_>) -> Vec<PathBuf> {
     }
 }
 
-fn match_base(options: &ScanOptions<'_>) -> Result<PathBuf> {
+fn match_base(options: &ScanOptions<'_>, roots: &[PathBuf]) -> Result<PathBuf> {
     if let Some(changed) = options.changed.filter(|changed| !changed.fallback) {
         return Ok(changed.repo_root.clone());
     }
     Ok(repository_root(options.cwd)?
         .or_else(|| nearest_project_root(options.cwd))
-        .unwrap_or_else(|| options.cwd.to_path_buf()))
+        .unwrap_or_else(|| common_scan_root(roots)))
+}
+
+fn common_scan_root(roots: &[PathBuf]) -> PathBuf {
+    let mut components = scan_anchor(&roots[0]).components().collect::<Vec<_>>();
+    for root in &roots[1..] {
+        let other = scan_anchor(root).components().collect::<Vec<_>>();
+        components.truncate(
+            components
+                .iter()
+                .zip(other)
+                .take_while(|(left, right)| left == &right)
+                .count(),
+        );
+    }
+    components.iter().collect()
+}
+
+fn scan_anchor(root: &Path) -> &Path {
+    let parent = root.parent().unwrap_or(root);
+    if root.is_file() {
+        parent.parent().unwrap_or(parent)
+    } else {
+        parent
+    }
 }
 
 fn nearest_project_root(start: &Path) -> Option<PathBuf> {
@@ -99,6 +127,40 @@ fn nearest_project_root(start: &Path) -> Option<PathBuf> {
         .ancestors()
         .find(|directory| directory.join(".complexity-gate.json").is_file())
         .map(Path::to_path_buf)
+}
+
+fn collect_changed_files(
+    changed: &ChangedFiles,
+    roots: &[PathBuf],
+    intersect_paths: bool,
+) -> Result<Vec<ScanFile>> {
+    if intersect_paths {
+        for root in roots {
+            if !root.exists() {
+                anyhow::bail!("unreadable path {}", root.display());
+            }
+        }
+    }
+    let selected = |path: &Path| {
+        !intersect_paths
+            || roots
+                .iter()
+                .any(|root| root.is_dir() && path.starts_with(root) || path == root)
+    };
+    let mut files = changed
+        .spans
+        .keys()
+        .chain(&changed.untracked)
+        .map(|path| changed.repo_root.join(path))
+        .filter(|path| selected(path))
+        .map(|path| ScanFile {
+            path,
+            explicit: false,
+        })
+        .collect::<Vec<_>>();
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    files.dedup_by(|left, right| left.path == right.path);
+    Ok(files)
 }
 
 fn collect_files(roots: &[PathBuf], base: &Path, config: &Config) -> Result<Vec<ScanFile>> {
@@ -145,9 +207,6 @@ fn scan_file(
 ) -> Result<()> {
     let display = relative(options.cwd, &file.path);
     let matched_path = relative(match_base, &file.path);
-    if !changed_file_selected(&matched_path, options.changed) {
-        return Ok(());
-    }
     let Some(language) = Language::from_path(&file.path) else {
         if file.explicit || unverified_source_path(&file.path) {
             result.unverified.push(Unverified {
@@ -183,13 +242,6 @@ fn scan_file(
         result.functions.push((display.clone(), function));
     }
     Ok(())
-}
-
-fn changed_file_selected(path: &Path, changed: Option<&ChangedFiles>) -> bool {
-    let Some(changed) = changed else { return true };
-    changed.fallback
-        || changed.spans.contains_key(path)
-        || changed.untracked.iter().any(|item| item == path)
 }
 
 fn changed_spans<'a>(path: &Path, changed: Option<&'a ChangedFiles>) -> Option<&'a [LineRange]> {
@@ -245,7 +297,19 @@ fn absolute(cwd: &Path, path: &Path) -> PathBuf {
 }
 
 fn relative(base: &Path, path: &Path) -> PathBuf {
-    path.strip_prefix(base).unwrap_or(path).to_path_buf()
+    if let Ok(relative) = path.strip_prefix(base) {
+        return relative.to_path_buf();
+    }
+    let base = base.components().collect::<Vec<_>>();
+    let path = path.components().collect::<Vec<_>>();
+    let shared = base
+        .iter()
+        .zip(&path)
+        .take_while(|(left, right)| left == right)
+        .count();
+    std::iter::repeat_n(std::path::Component::ParentDir, base.len() - shared)
+        .chain(path[shared..].iter().copied())
+        .collect()
 }
 
 fn unverified_source_path(path: &Path) -> bool {
