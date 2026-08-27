@@ -167,6 +167,27 @@ fn changed_config_is_noted_in_text_and_json_reports() {
 }
 
 #[test]
+fn changed_ignored_paths_are_filtered_before_language_lookup() {
+    let dir = tempfile::tempdir().unwrap();
+    for path in ["build/Bar.kt", "target/Foo.kt"] {
+        let file = dir.path().join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(file, "fun clean() = 1\n").unwrap();
+    }
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "-f", "build/Bar.kt", "target/Foo.kt"]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(dir.path().join("build/Bar.kt"), "fun changed() = 2\n").unwrap();
+    fs::write(dir.path().join("target/Foo.kt"), "fun changed() = 2\n").unwrap();
+
+    let output = command_output(dir.path(), &["check", "--changed"]);
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.stdout.is_empty(), "stdout: {}", String::from_utf8_lossy(&output.stdout));
+}
+
+#[test]
 fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
     let dir = tempfile::tempdir().unwrap();
     let state = tempfile::tempdir().unwrap();

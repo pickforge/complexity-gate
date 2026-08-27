@@ -221,6 +221,10 @@ fn scan_file(
 ) -> Result<()> {
     let display = relative(options.cwd, &file.path);
     let matched_path = relative(match_base, &file.path);
+    let config = load_config(&file.path, options.explicit_config)?.config;
+    if Config::matcher(&config.ignore)?.is_match(&matched_path) {
+        return Ok(());
+    }
     let Some(language) = Language::from_path(&file.path) else {
         if file.explicit || unverified_source_path(&file.path) {
             result.unverified.push(Unverified {
@@ -230,10 +234,6 @@ fn scan_file(
         }
         return Ok(());
     };
-    let config = load_config(&file.path, options.explicit_config)?.config;
-    if Config::matcher(&config.ignore)?.is_match(&matched_path) {
-        return Ok(());
-    }
     let source = match fs::read_to_string(&file.path) {
         Ok(source) => source,
         Err(error) => {
