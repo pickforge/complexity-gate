@@ -21,7 +21,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo run -- check crates
       - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cargo llvm-cov --workspace --locked --fail-under-lines 86
+      - run: cargo llvm-cov --workspace --locked --fail-under-lines 89
 
   gitleaks:
     runs-on: ubuntu-24.04
