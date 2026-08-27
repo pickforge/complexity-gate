@@ -1,0 +1,140 @@
+{
+  "reference": {
+    "tool": "hand-derived",
+    "version": "fixture comments",
+    "functions": [
+      {
+        "function": "trivial",
+        "line": 1,
+        "complexity": 1
+      },
+      {
+        "function": "atLimit",
+        "line": 3,
+        "complexity": 15
+      },
+      {
+        "function": "overComplexity",
+        "line": 21,
+        "complexity": 16
+      },
+      {
+        "function": "overDepth",
+        "line": 40,
+        "complexity": 6
+      },
+      {
+        "function": "overLines",
+        "line": 53,
+        "complexity": 1
+      },
+      {
+        "function": "overParams",
+        "line": 156,
+        "complexity": 1
+      },
+      {
+        "function": "nested",
+        "line": 158,
+        "complexity": 1
+      },
+      {
+        "function": "inner",
+        "line": 159,
+        "complexity": 2
+      },
+      {
+        "function": "decisions",
+        "line": 163,
+        "complexity": 18
+      },
+      {
+        "function": "Counter.increment",
+        "line": 180,
+        "complexity": 2
+      }
+    ]
+  },
+  "functions": [
+    {
+      "function": "trivial",
+      "line": 1,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "atLimit",
+      "line": 3,
+      "complexity": 15,
+      "depth": 1,
+      "lines": 17,
+      "params": 1
+    },
+    {
+      "function": "overComplexity",
+      "line": 21,
+      "complexity": 16,
+      "depth": 1,
+      "lines": 18,
+      "params": 1
+    },
+    {
+      "function": "overDepth",
+      "line": 40,
+      "complexity": 6,
+      "depth": 5,
+      "lines": 12,
+      "params": 1
+    },
+    {
+      "function": "overLines",
+      "line": 53,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 102,
+      "params": 1
+    },
+    {
+      "function": "overParams",
+      "line": 156,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 7
+    },
+    {
+      "function": "nested",
+      "line": 158,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 4,
+      "params": 1
+    },
+    {
+      "function": "inner",
+      "line": 159,
+      "complexity": 2,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "decisions",
+      "line": 163,
+      "complexity": 18,
+      "depth": 2,
+      "lines": 15,
+      "params": 2
+    },
+    {
+      "function": "Counter.increment",
+      "line": 180,
+      "complexity": 2,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    }
+  ]
+}

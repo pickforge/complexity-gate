@@ -1,0 +1,122 @@
+{
+  "reference": {
+    "tool": "lizard",
+    "version": "1.24.0",
+    "functions": [
+      {
+        "function": "trivial",
+        "line": 1,
+        "complexity": 1
+      },
+      {
+        "function": "at_limit",
+        "line": 3,
+        "complexity": 15
+      },
+      {
+        "function": "over_complexity",
+        "line": 21,
+        "complexity": 16
+      },
+      {
+        "function": "over_depth",
+        "line": 40,
+        "complexity": 5
+      },
+      {
+        "function": "over_lines",
+        "line": 55,
+        "complexity": 1
+      },
+      {
+        "function": "over_params",
+        "line": 158,
+        "complexity": 1
+      },
+      {
+        "function": "nested",
+        "line": 160,
+        "complexity": 1
+      },
+      {
+        "function": "decisions",
+        "line": 165,
+        "complexity": 9
+      }
+    ]
+  },
+  "functions": [
+    {
+      "function": "trivial",
+      "line": 1,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "at_limit",
+      "line": 3,
+      "complexity": 15,
+      "depth": 1,
+      "lines": 17,
+      "params": 1
+    },
+    {
+      "function": "over_complexity",
+      "line": 21,
+      "complexity": 16,
+      "depth": 1,
+      "lines": 18,
+      "params": 1
+    },
+    {
+      "function": "over_depth",
+      "line": 40,
+      "complexity": 6,
+      "depth": 5,
+      "lines": 14,
+      "params": 1
+    },
+    {
+      "function": "over_lines",
+      "line": 55,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 102,
+      "params": 1
+    },
+    {
+      "function": "over_params",
+      "line": 158,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 7
+    },
+    {
+      "function": "nested",
+      "line": 160,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 4,
+      "params": 1
+    },
+    {
+      "function": "inner",
+      "line": 161,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "decisions",
+      "line": 165,
+      "complexity": 12,
+      "depth": 1,
+      "lines": 11,
+      "params": 2
+    }
+  ]
+}

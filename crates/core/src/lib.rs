@@ -7,5 +7,5 @@ pub mod scan;
 
 pub use config::{Config, ConfigResolution, Limits, load_config};
 pub use diff::{ChangedFiles, LineRange, changed_files, parse_diff_hunks};
-pub use language::{FunctionMetrics, Language, grammar_inventory, parse_source};
+pub use language::{FunctionMetrics, Language, coverage_unknowns, grammar_inventory, parse_source};
 pub use scan::{ScanOptions, ScanResult, Unverified, Violation, scan};

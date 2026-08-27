@@ -1,10 +1,15 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
 use serde::Serialize;
 
-use crate::{ChangedFiles, Config, FunctionMetrics, Language, LineRange, load_config, parse_source};
+use crate::{
+    ChangedFiles, Config, FunctionMetrics, Language, LineRange, load_config, parse_source,
+};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct Violation {
@@ -38,8 +43,14 @@ pub struct ScanOptions<'a> {
 }
 
 pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
-    let roots = if options.paths.is_empty() { vec![options.cwd.to_path_buf()] } else {
-        options.paths.iter().map(|path| absolute(options.cwd, path)).collect()
+    let roots = if options.paths.is_empty() {
+        vec![options.cwd.to_path_buf()]
+    } else {
+        options
+            .paths
+            .iter()
+            .map(|path| absolute(options.cwd, path))
+            .collect()
     };
     let base_config = load_config(options.cwd, options.explicit_config)?.config;
     let files = collect_files(&roots, &base_config)?;
@@ -47,9 +58,13 @@ pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
     for file in files {
         scan_file(&file, options, &mut result)?;
     }
-    result.violations.sort_by(|a, b| (&a.file, a.line, &a.metric).cmp(&(&b.file, b.line, &b.metric)));
+    result
+        .violations
+        .sort_by(|a, b| (&a.file, a.line, &a.metric).cmp(&(&b.file, b.line, &b.metric)));
     result.unverified.sort_by(|a, b| a.file.cmp(&b.file));
-    result.functions.sort_by(|a, b| (&a.0, a.1.line).cmp(&(&b.0, b.1.line)));
+    result
+        .functions
+        .sort_by(|a, b| (&a.0, a.1.line).cmp(&(&b.0, b.1.line)));
     Ok(result)
 }
 
@@ -57,35 +72,56 @@ fn collect_files(roots: &[PathBuf], config: &Config) -> Result<Vec<PathBuf>> {
     let ignores = Config::matcher(&config.ignore)?;
     let mut files = Vec::new();
     for root in roots {
-        if root.is_file() { files.push(root.clone()); continue; }
-        if !root.exists() { anyhow::bail!("unreadable path {}", root.display()); }
-        let walker = WalkBuilder::new(root).standard_filters(true).hidden(false).build();
+        if root.is_file() {
+            files.push(root.clone());
+            continue;
+        }
+        if !root.exists() {
+            anyhow::bail!("unreadable path {}", root.display());
+        }
+        let walker = WalkBuilder::new(root)
+            .standard_filters(true)
+            .hidden(false)
+            .build();
         for entry in walker {
             let entry = entry.with_context(|| format!("cannot walk {}", root.display()))?;
-            if entry.file_type().is_some_and(|kind| kind.is_file()) && !ignores.is_match(entry.path()) {
+            if entry.file_type().is_some_and(|kind| kind.is_file())
+                && !ignores.is_match(entry.path())
+            {
                 files.push(entry.into_path());
             }
         }
     }
-    files.sort(); files.dedup();
+    files.sort();
+    files.dedup();
     Ok(files)
 }
 
 fn scan_file(file: &Path, options: &ScanOptions<'_>, result: &mut ScanResult) -> Result<()> {
     let display = relative(options.cwd, file);
-    if !changed_file_selected(&display, options.changed) { return Ok(()); }
+    if !changed_file_selected(&display, options.changed) {
+        return Ok(());
+    }
     let Some(language) = Language::from_path(file) else {
-        result.unverified.push(Unverified { file: display, reason: extension_reason(file) });
+        result.unverified.push(Unverified {
+            file: display,
+            reason: extension_reason(file),
+        });
         return Ok(());
     };
     let config = load_config(file, options.explicit_config)?.config;
-    if Config::matcher(&config.ignore)?.is_match(&display) { return Ok(()); }
-    let source = fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
+    if Config::matcher(&config.ignore)?.is_match(&display) {
+        return Ok(());
+    }
+    let source =
+        fs::read_to_string(file).with_context(|| format!("cannot read {}", file.display()))?;
     let functions = parse_source(language, &source)?;
     let test_file = Config::matcher(&config.tests.patterns)?.is_match(&display);
     let spans = changed_spans(&display, options.changed);
     for function in functions {
-        if spans.is_some_and(|ranges| !touches(&function, ranges)) { continue; }
+        if spans.is_some_and(|ranges| !touches(&function, ranges)) {
+            continue;
+        }
         result.checked += 1;
         add_violations(&display, &function, language, &config, test_file, result);
         result.functions.push((display.clone(), function));
@@ -95,32 +131,61 @@ fn scan_file(file: &Path, options: &ScanOptions<'_>, result: &mut ScanResult) ->
 
 fn changed_file_selected(path: &Path, changed: Option<&ChangedFiles>) -> bool {
     let Some(changed) = changed else { return true };
-    changed.fallback || changed.spans.contains_key(path) || changed.untracked.iter().any(|item| item == path)
+    changed.fallback
+        || changed.spans.contains_key(path)
+        || changed.untracked.iter().any(|item| item == path)
 }
 
 fn changed_spans<'a>(path: &Path, changed: Option<&'a ChangedFiles>) -> Option<&'a [LineRange]> {
     let changed = changed?;
-    if changed.fallback || changed.untracked.iter().any(|item| item == path) { return None; }
+    if changed.fallback || changed.untracked.iter().any(|item| item == path) {
+        return None;
+    }
     changed.spans.get(path).map(Vec::as_slice)
 }
 
 fn touches(function: &FunctionMetrics, ranges: &[LineRange]) -> bool {
-    ranges.iter().any(|range| range.intersects(function.line, function.end_line))
+    ranges
+        .iter()
+        .any(|range| range.intersects(function.line, function.end_line))
 }
 
-fn add_violations(file: &Path, function: &FunctionMetrics, language: Language, config: &Config, test_file: bool, result: &mut ScanResult) {
+fn add_violations(
+    file: &Path,
+    function: &FunctionMetrics,
+    language: Language,
+    config: &Config,
+    test_file: bool,
+    result: &mut ScanResult,
+) {
     let limits = config.limits_for(language.name());
-    let metrics = [("complexity", function.complexity, limits.complexity), ("depth", function.depth, limits.depth),
-        ("lines", function.lines, limits.lines), ("params", function.params, limits.params)];
+    let metrics = [
+        ("complexity", function.complexity, limits.complexity),
+        ("depth", function.depth, limits.depth),
+        ("lines", function.lines, limits.lines),
+        ("params", function.params, limits.params),
+    ];
     for (metric, value, limit) in metrics {
-        if value <= limit || test_file && config.tests.exempt.iter().any(|item| item == metric) { continue; }
-        result.violations.push(Violation { file: file.to_path_buf(), line: function.line,
-            function: function.function.clone(), metric: metric.to_owned(), value, limit });
+        if value <= limit || test_file && config.tests.exempt.iter().any(|item| item == metric) {
+            continue;
+        }
+        result.violations.push(Violation {
+            file: file.to_path_buf(),
+            line: function.line,
+            function: function.function.clone(),
+            metric: metric.to_owned(),
+            value,
+            limit,
+        });
     }
 }
 
 fn absolute(cwd: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() { path.to_path_buf() } else { cwd.join(path) }
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        cwd.join(path)
+    }
 }
 
 fn relative(cwd: &Path, path: &Path) -> PathBuf {
@@ -128,6 +193,10 @@ fn relative(cwd: &Path, path: &Path) -> PathBuf {
 }
 
 fn extension_reason(path: &Path) -> String {
-    path.extension().and_then(|value| value.to_str()).map_or_else(
-        || "no grammar for extensionless file".to_owned(), |extension| format!("no grammar for .{extension}"))
+    path.extension()
+        .and_then(|value| value.to_str())
+        .map_or_else(
+            || "no grammar for extensionless file".to_owned(),
+            |extension| format!("no grammar for .{extension}"),
+        )
 }
