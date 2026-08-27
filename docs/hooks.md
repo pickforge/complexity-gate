@@ -23,7 +23,14 @@ For that event the gate checks all functions touched in the Git diff. This is
 less precise if unrelated working-tree edits already exist. Neither post-tool
 hook can undo an edit that already happened.
 
-The stop loop guard is shared across harnesses. Counters are keyed by
-`session_id` under `~/.pickforge/complexity-gate/`, or
-`COMPLEXITY_GATE_HOME` when set. A clean stop resets its counter; reaching
-`hook.max_blocks` allows completion and reports `UNRESOLVED` on stderr.
+The stop loop guard is shared across harnesses. Counters are keyed by a
+sanitized, length-capped `session_id` under `~/.pickforge/complexity-gate/`, or
+`COMPLEXITY_GATE_HOME` when set. The hook blocks the first `hook.max_blocks`
+consecutive failing Stop events. Later failing Stop events report `UNRESOLVED`
+on stderr and do not reset the counter; only a clean Stop resets it. A missing
+`session_id` uses the `unkeyed` counter, and a missing `cwd` uses the process
+working directory.
+
+Claude Code's `stop_hook_active` input field is intentionally ignored. The
+local counter is the loop guard for both harnesses, regardless of whether a
+Stop event was triggered by another Stop hook continuation.

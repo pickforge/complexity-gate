@@ -1,5 +1,7 @@
 use std::{
     fs,
+    io::Write,
+    path::Path,
     process::{Command, Output, Stdio},
 };
 
@@ -130,6 +132,45 @@ fn test_patterns_and_ignores_use_repository_relative_paths() {
 }
 
 #[test]
+fn stop_loop_guard_blocks_three_then_releases_without_reset() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.js");
+    fs::write(&file, "function bad(x) { return x; }\n").unwrap();
+    fs::write(
+        dir.path().join(".complexity-gate.json"),
+        r#"{"limits":{"depth":0},"hook":{"max_blocks":3}}"#,
+    )
+    .unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&file, "function bad(x) { if (x) return 1; return 0; }\n").unwrap();
+    let input = serde_json::json!({
+        "hook_event_name":"Stop", "session_id":"same/session", "cwd":dir.path()
+    })
+    .to_string();
+
+    for index in 0..5 {
+        let output = hook_output(state.path(), &input);
+        assert!(output.status.success());
+        if index < 3 {
+            assert!(String::from_utf8_lossy(&output.stdout).contains(r#""decision":"block""#));
+            assert!(output.stderr.is_empty());
+        } else {
+            assert!(output.stdout.is_empty());
+            assert!(String::from_utf8_lossy(&output.stderr).starts_with("UNRESOLVED FAIL"));
+        }
+    }
+    assert_eq!(
+        fs::read_to_string(state.path().join("same_session.count")).unwrap(),
+        "5"
+    );
+}
+
+#[test]
 fn both_hook_commands_parse_current_post_tool_input() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("bad.js");
@@ -155,7 +196,6 @@ fn both_hook_commands_parse_current_post_tool_input() {
             .stdout(Stdio::piped())
             .spawn()
             .unwrap();
-        use std::io::Write;
         child
             .stdin
             .take()
@@ -169,11 +209,29 @@ fn both_hook_commands_parse_current_post_tool_input() {
     }
 }
 
-fn command_output(cwd: &std::path::Path, args: &[&str]) -> Output {
+fn command_output(cwd: &Path, args: &[&str]) -> Output {
     binary().current_dir(cwd).args(args).output().unwrap()
 }
 
-fn git(cwd: &std::path::Path, args: &[&str]) {
+fn hook_output(state: &Path, input: &str) -> Output {
+    let mut child = binary()
+        .args(["hook", "claude"])
+        .env("COMPLEXITY_GATE_HOME", state)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+fn git(cwd: &Path, args: &[&str]) {
     assert!(
         Command::new("git")
             .current_dir(cwd)

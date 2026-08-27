@@ -1,7 +1,5 @@
 use std::{
-    collections::hash_map::DefaultHasher,
     env, fs,
-    hash::{Hash, Hasher},
     io::{self, Read},
     path::{Path, PathBuf},
 };
@@ -20,7 +18,9 @@ pub enum Harness {
 #[derive(Debug, Deserialize)]
 struct HookInput {
     hook_event_name: String,
+    #[serde(default)]
     session_id: String,
+    #[serde(default = "default_cwd")]
     cwd: PathBuf,
     #[serde(default)]
     tool_name: Option<String>,
@@ -119,9 +119,8 @@ fn report_stop(input: &HookInput) -> Result<()> {
     }
     let report = text_report(&result.violations);
     let max = load_config(&input.cwd, None)?.config.hook.max_blocks;
-    if increment_counter(&input.session_id)? >= max {
+    if increment_counter(&input.session_id)? > max {
         eprintln!("UNRESOLVED {report}");
-        reset_counter(&input.session_id)?;
         return Ok(());
     }
     emit_block(&format!(
@@ -167,10 +166,31 @@ fn dirs_home() -> Option<PathBuf> {
     env::var_os("HOME").map(PathBuf::from)
 }
 
+fn default_cwd() -> PathBuf {
+    env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
 fn state_file(session_id: &str) -> Result<PathBuf> {
-    let mut hasher = DefaultHasher::new();
-    session_id.hash(&mut hasher);
-    Ok(state_dir()?.join(format!("{:016x}.count", hasher.finish())))
+    Ok(state_dir()?.join(format!("{}.count", sanitized_session_id(session_id))))
+}
+
+fn sanitized_session_id(session_id: &str) -> String {
+    let sanitized: String = session_id
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .take(128)
+        .collect();
+    if sanitized.is_empty() {
+        "unkeyed".to_owned()
+    } else {
+        sanitized
+    }
 }
 
 fn increment_counter(session_id: &str) -> Result<usize> {
@@ -234,5 +254,20 @@ mod tests {
             ),
         );
         assert!(matches!(event, Event::Changed));
+    }
+
+    #[test]
+    fn optional_hook_fields_default_before_classification() {
+        let parsed: HookInput = serde_json::from_str(r#"{"hook_event_name":"Other"}"#).unwrap();
+        assert!(parsed.session_id.is_empty());
+        assert!(!parsed.cwd.as_os_str().is_empty());
+        assert!(matches!(classify(Harness::Claude, &parsed), Event::Ignore));
+    }
+
+    #[test]
+    fn session_ids_are_sanitized_and_bounded() {
+        assert_eq!(sanitized_session_id("agent/a:b"), "agent_a_b");
+        assert_eq!(sanitized_session_id(""), "unkeyed");
+        assert_eq!(sanitized_session_id(&"x".repeat(200)).len(), 128);
     }
 }
