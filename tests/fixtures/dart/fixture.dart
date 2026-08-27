@@ -1,49 +1,49 @@
 int trivial(int x) => x;
 
 int atLimit(int x) {
-  if (x == 0) x++;
-  if (x == 1) x++;
-  if (x == 2) x++;
-  if (x == 3) x++;
-  if (x == 4) x++;
-  if (x == 5) x++;
-  if (x == 6) x++;
-  if (x == 7) x++;
-  if (x == 8) x++;
-  if (x == 9) x++;
-  if (x == 10) x++;
-  if (x == 11) x++;
-  if (x == 12) x++;
-  if (x == 13) x++;
+  if (x == 0) x++; // +1 if
+  if (x == 1) x++; // +1 if
+  if (x == 2) x++; // +1 if
+  if (x == 3) x++; // +1 if
+  if (x == 4) x++; // +1 if
+  if (x == 5) x++; // +1 if
+  if (x == 6) x++; // +1 if
+  if (x == 7) x++; // +1 if
+  if (x == 8) x++; // +1 if
+  if (x == 9) x++; // +1 if
+  if (x == 10) x++; // +1 if
+  if (x == 11) x++; // +1 if
+  if (x == 12) x++; // +1 if
+  if (x == 13) x++; // +1 if
   return x;
 }
 
 int overComplexity(int x) {
-  if (x == 0) x++;
-  if (x == 1) x++;
-  if (x == 2) x++;
-  if (x == 3) x++;
-  if (x == 4) x++;
-  if (x == 5) x++;
-  if (x == 6) x++;
-  if (x == 7) x++;
-  if (x == 8) x++;
-  if (x == 9) x++;
-  if (x == 10) x++;
-  if (x == 11) x++;
-  if (x == 12) x++;
-  if (x == 13) x++;
-  if (x == 14) x++;
+  if (x == 0) x++; // +1 if
+  if (x == 1) x++; // +1 if
+  if (x == 2) x++; // +1 if
+  if (x == 3) x++; // +1 if
+  if (x == 4) x++; // +1 if
+  if (x == 5) x++; // +1 if
+  if (x == 6) x++; // +1 if
+  if (x == 7) x++; // +1 if
+  if (x == 8) x++; // +1 if
+  if (x == 9) x++; // +1 if
+  if (x == 10) x++; // +1 if
+  if (x == 11) x++; // +1 if
+  if (x == 12) x++; // +1 if
+  if (x == 13) x++; // +1 if
+  if (x == 14) x++; // +1 if
   return x;
 }
 
 int overDepth(int x) {
-  if (x > 0) {
-    while (x > 0) {
-      for (var i = 0; i < x; i++) {
+  if (x > 0) { // +1 if
+    while (x > 0) { // +1 while
+      for (var i = 0; i < x; i++) { // +1 for
         try {
-          if (i > 0) return i;
-        } catch (_) { return 0; }
+          if (i > 0) return i; // +1 if
+        } catch (_) { return 0; } // +1 catch
       }
     }
   }
@@ -156,7 +156,7 @@ int overLines(int x) {
 int overParams(int a,int b,int c,int d,int e,int f,int g) => a;
 
 int nested(int x) {
-  int inner(int y) => y > 0 ? 1 : 0;
+  int inner(int y) => y > 0 ? 1 : 0; // +1 ternary
   return inner(x);
 }
 
@@ -177,5 +177,5 @@ int decisions(int x, int? value) {
 }
 
 class Counter {
-  int increment(int x) => x > 0 ? x + 1 : 0;
+  int increment(int x) => x > 0 ? x + 1 : 0; // +1 ternary
 }
