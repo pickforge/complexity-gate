@@ -124,11 +124,12 @@ fn test_patterns_and_ignores_use_repository_relative_paths() {
     let long = format!("function big() {{\n{}\n}}\n", "return 1;\n".repeat(101));
     fs::write(tests.join("big.js"), long).unwrap();
     fs::write(tests.join("ignored.js"), complex_function()).unwrap();
-    git(dir.path(), &["init", "-q"]);
 
-    let output = command_output(&tests, &["check", "."]);
-    assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    for paths in [["check", "."], ["check", "big.js"]] {
+        let output = command_output(&tests, &paths);
+        assert!(output.status.success());
+        assert!(output.stdout.is_empty());
+    }
 }
 
 #[test]

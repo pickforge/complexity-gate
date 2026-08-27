@@ -89,7 +89,16 @@ fn match_base(options: &ScanOptions<'_>) -> Result<PathBuf> {
     if let Some(changed) = options.changed.filter(|changed| !changed.fallback) {
         return Ok(changed.repo_root.clone());
     }
-    Ok(repository_root(options.cwd)?.unwrap_or_else(|| options.cwd.to_path_buf()))
+    Ok(repository_root(options.cwd)?
+        .or_else(|| nearest_project_root(options.cwd))
+        .unwrap_or_else(|| options.cwd.to_path_buf()))
+}
+
+fn nearest_project_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|directory| directory.join(".complexity-gate.json").is_file())
+        .map(Path::to_path_buf)
 }
 
 fn collect_files(roots: &[PathBuf], base: &Path, config: &Config) -> Result<Vec<ScanFile>> {
