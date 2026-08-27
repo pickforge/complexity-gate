@@ -329,7 +329,7 @@ fn measure_function(
         end_line: end + offset,
         complexity: score.complexity,
         depth: score.depth,
-        lines: significant_lines(source, start, end, language),
+        lines: significant_lines(source, start, end, node),
         params: parameter_count(node, language, source),
     }
 }
@@ -353,7 +353,7 @@ fn measure_node(
     if is_decision(node, language, source) {
         score.complexity += 1;
     }
-    let opens = opens_depth(node, language) && !is_else_if(node, language);
+    let opens = opens_depth(node, language) && !is_else_if(node);
     let next_depth = depth + usize::from(opens);
     score.depth = score.depth.max(next_depth);
     let mut cursor = node.walk();
@@ -478,14 +478,21 @@ fn has_operator(node: Node<'_>, source: &str, wanted: &[&str]) -> bool {
 }
 
 fn is_default_arm(node: Node<'_>, source: &str) -> bool {
-    if node_text(node, source).trim_start().starts_with("default") {
-        return true;
-    }
     let pattern = node.child_by_field_name("pattern").or_else(|| {
         let mut cursor = node.walk();
         node.named_children(&mut cursor).next()
     });
-    pattern.is_some_and(|pattern| node_text(pattern, source).trim() == "_")
+    pattern.is_some_and(|pattern| {
+        let wildcard = node_text(pattern, source).trim() == "_"
+            || pattern
+                .child_by_field_name("pattern")
+                .is_some_and(|inner| node_text(inner, source).trim() == "_");
+        let mut cursor = node.walk();
+        wildcard
+            && !node
+                .children(&mut cursor)
+                .any(|child| node_text(child, source) == "when")
+    })
 }
 
 fn opens_depth(node: Node<'_>, language: Language) -> bool {
@@ -539,16 +546,8 @@ fn opens_depth(node: Node<'_>, language: Language) -> bool {
     }
 }
 
-fn is_else_if(node: Node<'_>, language: Language) -> bool {
-    if !matches!(
-        language,
-        Language::JavaScript
-            | Language::TypeScript
-            | Language::Tsx
-            | Language::Dart
-            | Language::Rust
-            | Language::Go
-    ) {
+fn is_else_if(node: Node<'_>) -> bool {
+    if !matches!(node.kind(), "if_statement" | "if_expression") {
         return false;
     }
     let Some(parent) = node.parent() else {
@@ -755,27 +754,40 @@ fn receiver_parameter(node: Node<'_>, source: &str) -> bool {
         || text.starts_with("this:")
 }
 
-fn significant_lines(source: &str, start: usize, end: usize, language: Language) -> usize {
+fn significant_lines(source: &str, start: usize, end: usize, node: Node<'_>) -> usize {
+    let mut comments = Vec::new();
+    collect_comments(node, &mut comments);
+    let mut offset = 0;
     source
-        .lines()
-        .skip(start.saturating_sub(1))
-        .take(end - start + 1)
-        .filter(|line| !comment_or_blank(line, language))
+        .split_inclusive('\n')
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let line_start = offset;
+            offset += line.len();
+            (index + 1 >= start && index < end).then_some((line_start, line))
+        })
+        .filter(|(line_start, line)| line_has_code(*line_start, line, &comments))
         .count()
 }
 
-fn comment_or_blank(line: &str, language: Language) -> bool {
-    let line = line.trim();
-    if line.is_empty() {
-        return true;
+fn collect_comments(node: Node<'_>, comments: &mut Vec<(usize, usize)>) {
+    if node.kind().ends_with("comment") {
+        comments.push((node.start_byte(), node.end_byte()));
+        return;
     }
-    if matches!(language, Language::Python) {
-        return line.starts_with('#');
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_comments(child, comments);
     }
-    line.starts_with("//")
-        || line.starts_with("/*")
-        || line.starts_with('*')
-        || line.starts_with("*/")
+}
+
+fn line_has_code(line_start: usize, line: &str, comments: &[(usize, usize)]) -> bool {
+    line.bytes().enumerate().any(|(index, byte)| {
+        !byte.is_ascii_whitespace()
+            && !comments
+                .iter()
+                .any(|(start, end)| *start <= line_start + index && line_start + index < *end)
+    })
 }
 
 fn node_text<'a>(node: Node<'_>, source: &'a str) -> &'a str {
@@ -915,26 +927,82 @@ fn expression_decisions(line: &str) -> usize {
     pairs + ternary
 }
 
+enum MaskContext {
+    Code(Option<usize>),
+    Quote(u8),
+    Template,
+}
+
 fn mask_quoted_text(source: &str) -> String {
-    let mut result = source.as_bytes().to_vec();
-    let mut quote = None;
-    let mut escaped = false;
-    for byte in &mut result {
-        if let Some(delimiter) = quote {
-            if escaped {
-                escaped = false;
-            } else if *byte == b'\\' {
-                escaped = true;
-            } else if *byte == delimiter {
-                quote = None;
+    let bytes = source.as_bytes();
+    let mut result = vec![b' '; bytes.len()];
+    let mut contexts = vec![MaskContext::Code(None)];
+    let mut index = 0;
+    while index < bytes.len() {
+        let Some(context) = contexts.pop() else {
+            break;
+        };
+        index += match context {
+            MaskContext::Code(depth) => {
+                mask_code_byte(bytes, index, depth, &mut contexts, &mut result)
             }
-            *byte = b' ';
-        } else if matches!(*byte, b'\'' | b'"' | b'`') {
-            quote = Some(*byte);
-            *byte = b' ';
-        }
+            MaskContext::Quote(delimiter) => {
+                mask_quote_byte(bytes[index], delimiter, &mut contexts)
+            }
+            MaskContext::Template => mask_template_byte(bytes, index, &mut contexts),
+        };
     }
     String::from_utf8(result).unwrap_or_default()
+}
+
+fn mask_code_byte(
+    bytes: &[u8],
+    index: usize,
+    depth: Option<usize>,
+    contexts: &mut Vec<MaskContext>,
+    result: &mut [u8],
+) -> usize {
+    match bytes[index] {
+        b'\'' | b'"' => {
+            contexts.extend([MaskContext::Code(depth), MaskContext::Quote(bytes[index])]);
+        }
+        b'`' => contexts.extend([MaskContext::Code(depth), MaskContext::Template]),
+        b'{' if depth.is_some() => contexts.push(MaskContext::Code(depth.map(|value| value + 1))),
+        b'}' if depth == Some(0) => {}
+        b'}' => contexts.push(MaskContext::Code(depth.map(|value| value - 1))),
+        byte => {
+            result[index] = byte;
+            contexts.push(MaskContext::Code(depth));
+        }
+    }
+    1
+}
+
+fn mask_quote_byte(byte: u8, delimiter: u8, contexts: &mut Vec<MaskContext>) -> usize {
+    if byte == b'\\' {
+        contexts.push(MaskContext::Quote(delimiter));
+        2
+    } else if byte == delimiter {
+        1
+    } else {
+        contexts.push(MaskContext::Quote(delimiter));
+        1
+    }
+}
+
+fn mask_template_byte(bytes: &[u8], index: usize, contexts: &mut Vec<MaskContext>) -> usize {
+    if bytes[index] == b'\\' {
+        contexts.push(MaskContext::Template);
+        2
+    } else if bytes[index] == b'`' {
+        1
+    } else if bytes[index..].starts_with(b"${") {
+        contexts.extend([MaskContext::Template, MaskContext::Code(Some(0))]);
+        2
+    } else {
+        contexts.push(MaskContext::Template);
+        1
+    }
 }
 
 #[cfg(test)]
@@ -982,6 +1050,22 @@ mod tests {
     }
 
     #[test]
+    fn unbraced_else_control_flow_opens_its_own_level() {
+        let javascript = parse_source(
+            Language::JavaScript,
+            "function branches(x) { if (x) {} else for (;;) { while (x) { if (x) {} } } if (x) {} else try { while (x) { if (x) {} } } catch {} if (x) {} else switch (x) { case 1: while (x) { if (x) {} } } }",
+        )
+        .unwrap();
+        let dart = parse_source(
+            Language::Dart,
+            "void branches(int x) { if (x > 0) {} else for (;;) { while (x > 0) { if (x > 0) {} } } if (x > 0) {} else try { while (x > 0) { if (x > 0) {} } } catch (_) {} if (x > 0) {} else switch (x) { case 1: while (x > 0) { if (x > 0) {} } } }",
+        )
+        .unwrap();
+        assert_eq!(javascript[0].depth, 4);
+        assert_eq!(dart[0].depth, 4);
+    }
+
+    #[test]
     fn callbacks_are_anonymous_and_single_arrow_parameter_counts() {
         let functions = parse_source(
             Language::JavaScript,
@@ -1002,12 +1086,28 @@ mod tests {
         .unwrap();
         let rust = parse_source(
             Language::Rust,
-            "fn choose(x:u8)->u8 { match x { 0 => 1, _unused => 2 } }",
+            "fn choose(default_value:u8)->u8 { match default_value { 0 => 1, default_value => 2 } }",
         )
         .unwrap();
-        let svelte = parse_source(Language::Svelte, "<p>{\"question? && ||\"}</p>").unwrap();
+        let guarded_dart = parse_source(
+            Language::Dart,
+            "int guarded(int v) => switch (v) { _ when v > 0 => 1, _ => 2 };",
+        )
+        .unwrap();
+        let named_dart = parse_source(
+            Language::Dart,
+            "int named(int defaultValue) => switch (defaultValue) { defaultValue => 1 };",
+        )
+        .unwrap();
+        let svelte = parse_source(
+            Language::Svelte,
+            "<p>{\"question? && ||\"} {`s: ${ready && v}`}</p>",
+        )
+        .unwrap();
         assert_eq!(dart[0].complexity, 2);
+        assert_eq!(guarded_dart[0].complexity, 2);
+        assert_eq!(named_dart[0].complexity, 2);
         assert_eq!(rust[0].complexity, 3);
-        assert_eq!(svelte[0].complexity, 1);
+        assert_eq!(svelte[0].complexity, 2);
     }
 }

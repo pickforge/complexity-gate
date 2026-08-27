@@ -188,3 +188,8 @@ func reviewCases(values []int, x int, err error) int {
 	apply(values, func(value int) int { return value + len(marker) })
 	return x
 }
+
+func commentLines(x int) int {
+	/* comment-only */
+	/* inline */ return x
+}

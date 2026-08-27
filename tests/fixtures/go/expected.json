@@ -53,6 +53,11 @@
         "function": "reviewCases",
         "line": 181,
         "complexity": 5
+      },
+      {
+        "function": "commentLines",
+        "line": 192,
+        "complexity": 1
       }
     ]
   },
@@ -151,6 +156,14 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "commentLines",
+      "line": 192,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
       "params": 1
     }
   ]

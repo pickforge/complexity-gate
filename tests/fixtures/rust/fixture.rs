@@ -184,3 +184,9 @@ fn review_cases(values: &[i32], mut x: i32, result: Result<(), ()>) -> i32 {
     values.iter().map(|value| *value + marker.len() as i32).sum::<i32>();
     x
 }
+
+fn comment_lines(ptr: &mut i32) -> i32 {
+    /* comment-only */
+    /* inline */ *ptr += 1;
+    *ptr
+}

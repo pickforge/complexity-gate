@@ -187,3 +187,7 @@ def review_cases(values, x):
     finally: x += 0
     list(map(lambda value: value + len(marker), values))
     return x
+
+def comment_lines(x):
+    # comment-only
+    return x  # inline comment

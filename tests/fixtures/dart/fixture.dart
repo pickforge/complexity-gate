@@ -190,3 +190,8 @@ int reviewCases(List<int> values, int x) {
   values.map((value) => value + marker.length); // anonymous callback: base 1
   return x;
 }
+
+int commentLines(int x) {
+  /* comment-only */
+  /* inline */ return x;
+}

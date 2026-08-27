@@ -188,3 +188,8 @@ function reviewCases(values, x) {
   values.map(value => value + marker.length);
   return x;
 }
+
+function commentLines(x) {
+  /* comment-only */
+  /* inline */ return x;
+}

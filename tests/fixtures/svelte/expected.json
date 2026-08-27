@@ -7,7 +7,7 @@
       {
         "function": "<template>",
         "line": 1,
-        "complexity": 10
+        "complexity": 11
       },
       {
         "function": "trivial",
@@ -68,6 +68,11 @@
         "function": "<anonymous>",
         "line": 189,
         "complexity": 1
+      },
+      {
+        "function": "commentLines",
+        "line": 193,
+        "complexity": 1
       }
     ]
   },
@@ -75,7 +80,7 @@
     {
       "function": "<template>",
       "line": 1,
-      "complexity": 10,
+      "complexity": 11,
       "depth": 3,
       "lines": 0,
       "params": 0
@@ -174,6 +179,14 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
+      "params": 1
+    },
+    {
+      "function": "commentLines",
+      "line": 193,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
       "params": 1
     }
   ]

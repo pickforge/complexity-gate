@@ -189,6 +189,11 @@ function reviewCases(values: number[], x: number): number {
   values.map(value => value + marker.length); // anonymous callback: base 1
   return x;
 }
+
+function commentLines(x: number): number {
+  /* comment-only */
+  /* inline */ return x;
+}
 </script>
 
 <!-- +1 template if -->
@@ -205,5 +210,7 @@ function reviewCases(values: number[], x: number): number {
 {:else if fallback || ready} <!-- +1 else-if, +1 || -->
   <p>{fallback ?? value}</p> <!-- +1 ?? -->
 {/if}
+
+<p>{`s: ${ready && value}`}</p>
 
 <style>.x { color: red; }</style>
