@@ -465,9 +465,13 @@ fn widget_depth_in_node(
         let body = node.child_by_field_name("body").unwrap_or(node);
         return widget_depth_in_node(body, root_id, source, depth, false);
     }
-    if is_constructor_like(node, source) {
-        return widget_depth_in_constructor(node, root_id, source, depth + 1);
+    if node.kind() == "named_argument" {
+        return widget_slot_value(node, source).map_or(depth, |value| {
+            widget_depth_in_node(value, root_id, source, depth, true)
+        });
     }
+    let constructor = is_constructor_like(node, source);
+    let depth = depth + usize::from(constructor);
     let mut maximum = depth;
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
@@ -476,43 +480,26 @@ fn widget_depth_in_node(
             root_id,
             source,
             depth,
-            closure_slot,
+            closure_slot || constructor,
         ));
     }
     maximum
 }
 
-fn widget_depth_in_constructor(
-    node: Node<'_>,
-    root_id: usize,
-    source: &str,
-    depth: usize,
-) -> usize {
-    let Some(arguments) = node.child_by_field_name("arguments") else {
-        return depth;
-    };
-    let mut maximum = depth;
-    let mut cursor = arguments.walk();
-    for argument in arguments.named_children(&mut cursor) {
-        let value = if argument.kind() == "named_argument" {
-            let mut argument_cursor = argument.walk();
-            let mut children = argument.named_children(&mut argument_cursor);
-            let Some(label) = children.next() else {
-                continue;
-            };
-            let name = node_text(label, source).trim_end_matches(':');
-            if !WIDGET_SLOTS.contains(&name) {
-                continue;
-            }
-            children.next()
-        } else {
-            Some(argument)
-        };
-        if let Some(value) = value {
-            maximum = maximum.max(widget_depth_in_node(value, root_id, source, depth, true));
-        }
+/// A named argument carries depth only when its label names a widget slot;
+/// `padding:` and `decoration:` values are configuration, not visual nesting.
+/// The check lives here rather than at the constructor so that it still applies
+/// when the grammar leaves an argument list dangling, as it does for arrow-bodied
+/// builders.
+fn widget_slot_value<'tree>(node: Node<'tree>, source: &str) -> Option<Node<'tree>> {
+    let mut cursor = node.walk();
+    let mut children = node.named_children(&mut cursor);
+    let label = children.next()?;
+    let name = node_text(label, source).trim_end_matches(':');
+    if !WIDGET_SLOTS.contains(&name) {
+        return None;
     }
-    maximum
+    children.next()
 }
 
 const WIDGET_SLOTS: &[&str] = &[
@@ -575,7 +562,10 @@ fn leftmost_callee_identifier(node: Node<'_>) -> Option<Node<'_>> {
 }
 
 fn starts_ascii_uppercase(text: &str) -> bool {
-    text.as_bytes().first().is_some_and(u8::is_ascii_uppercase)
+    text.trim_start_matches('_')
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_uppercase)
 }
 
 fn is_function(language: Language, kind: &str) -> bool {

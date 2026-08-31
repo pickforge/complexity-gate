@@ -235,3 +235,16 @@ class CountedValueWidget {
 
 // Repeated `??` nests in the Dart grammar, so four operators form one chain.
 String nullChain(a, b, c, d, e) => a ?? b ?? c ?? d ?? e;
+
+class ArrowBuilderWidget {
+  // The grammar leaves the argument list dangling for arrow-bodied builders, so
+  // the slot filter has to apply during descent, not only at the constructor.
+  @override
+  Widget build(BuildContext context) =>
+      Builder(builder: (c) => Wrapper(padding: Ignored(child: Center(child: Text('x')))));
+}
+
+class PrivateWidget {
+  @override
+  Widget build(BuildContext context) => _Card(padding: Ignored(child: Text('x')));
+}

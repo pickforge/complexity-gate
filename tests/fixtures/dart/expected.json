@@ -130,6 +130,27 @@
         "complexity": 5,
         "hand_derived": true,
         "derivation": "Base 1 plus four `??` decision operators; the four operators also form one bool_ops chain."
+      },
+      {
+        "function": "ArrowBuilderWidget.build",
+        "line": 242,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Arrow-bodied builder: Builder counts once; the padding: subtree is not a widget slot, so Ignored/Center/Text do not count."
+      },
+      {
+        "function": "<anonymous>",
+        "line": 244,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Builder callback measured as its own function."
+      },
+      {
+        "function": "PrivateWidget.build",
+        "line": 248,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "_Card counts as a widget constructor (leading underscores trimmed); its padding: value does not."
       }
     ]
   },
@@ -353,6 +374,36 @@
       "params": 5,
       "bool_ops": 4,
       "widget_depth": 0
+    },
+    {
+      "function": "ArrowBuilderWidget.build",
+      "line": 242,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 1
+    },
+    {
+      "function": "<anonymous>",
+      "line": 244,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "PrivateWidget.build",
+      "line": 248,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 2,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 1
     }
   ]
 }

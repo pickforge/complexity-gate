@@ -75,7 +75,8 @@ A *boolean chain root* is a short-circuit boolean operator node (the same
 operators the decision-point rules list: `&&`, `||`, `??`, Python `and`/`or`,
 and the assignment forms `&&=`, `||=`, `??=`) whose parent is not itself one of
 those operators. For each chain root, count every short-circuit boolean operator
-in its subtree, not descending into nested function or closure bodies.
+in its subtree, not descending into nested function or closure bodies or into
+conditional expressions.
 `bool_ops` is the maximum over all chain roots in the function; a function with
 no boolean operator scores 0.
 
@@ -94,11 +95,15 @@ this metric measures that nesting.
 
 A *constructor-like node* is:
 
-- a `const_object_expression` or `new_expression`; or
+- a `const_object_expression`, `new_expression`, or `constructor_invocation`; or
 - a call/invocation whose callee is an identifier whose first character is an
   ASCII uppercase letter (`Column(...)`); or
 - a call/invocation whose callee is a member/selector expression whose leftmost
   identifier starts with an ASCII uppercase letter (`Theme.of(...)`).
+
+Leading underscores are trimmed before the uppercase test, so a private widget
+(`_Card(...)`, idiomatic for sub-widgets in a single file) counts like any
+other.
 
 Counting the whole expression tree would inflate the score with value
 constructors — `EdgeInsets.all`, `BorderRadius.circular`, `BoxDecoration`,
@@ -122,16 +127,20 @@ Widget-slot argument names:
 Starting at 0, increment on entering a constructor-like node reached through a
 widget slot, and report the maximum reached on any path. Do not descend into
 nested *named* function declarations; do descend into closures passed to widget
-slots. A constructor-like node reached through any other named argument
-(`padding:`, `decoration:`, `style:`, `duration:`) is not counted and its
-subtree is not traversed for this metric.
+slots. A named argument whose label is not a widget slot (`padding:`, `decoration:`,
+`style:`, `duration:`) is not counted and its subtree is not traversed for this
+metric. This test is applied to every named argument encountered during the
+walk, not only to the arguments of a recognised constructor: the Dart grammar
+leaves the argument list dangling for arrow-bodied builders
+(`builder: (c) => Foo(padding: ...)`), so filtering only at the constructor
+would let those subtrees through.
 
 This is deliberately a syntactic proxy. Without type resolution the analyzer
 cannot prove that `Foo(...)` returns a `Widget`; the slot restriction is what
-keeps the proxy honest. Calibrated against 249 Flutter `build` methods (ConstruApp, 3d_portfolio,
-pickarena): median 3, p90 6, p95 7, max 10. The default of 7 fails 6 methods
-(2.4%), the genuine outliers; a limit of 6 would fail 16 and a limit of 5 would
-fail 35. Both the uppercase rule and the slot list are part of
+keeps the proxy honest. Calibrated against 258 Flutter `build` methods (ConstruApp, 3d_portfolio,
+pickarena): median 4, p90 7, p95 7, max 10. The default of 7 fails 12 methods
+(4.7%) — the p95 boundary; a limit of 6 would fail 28 and a limit of 5 would
+fail 53. Both the uppercase rule and the slot list are part of
 this contract — changing either changes every score, so they change only with a
 fixture update.
 
