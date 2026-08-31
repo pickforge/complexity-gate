@@ -25,6 +25,8 @@ pub struct FunctionMetrics {
     pub depth: usize,
     pub lines: usize,
     pub params: usize,
+    pub bool_ops: usize,
+    pub widget_depth: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -227,12 +229,7 @@ fn coverage_classified(kind: &str) -> bool {
 }
 
 fn coverage_ignored(kind: &str) -> bool {
-    kind.starts_with('_')
-        || kind.contains("_repeat")
-        || kind.contains("identifier")
-        || kind.contains("parameter")
-        || kind.contains("modifier")
-        || kind.contains("specifier")
+    ignored_kind_name(kind)
         || matches!(
             kind,
             "accessibility_modifier"
@@ -260,6 +257,19 @@ fn coverage_ignored(kind: &str) -> bool {
                 | "switch_body"
                 | "type_case_repeat1"
         )
+}
+
+fn ignored_kind_name(kind: &str) -> bool {
+    kind.starts_with('_')
+        || [
+            "_repeat",
+            "identifier",
+            "parameter",
+            "modifier",
+            "specifier",
+        ]
+        .iter()
+        .any(|part| kind.contains(part))
 }
 
 pub fn parse_source(language: Language, source: &str) -> Result<Vec<FunctionMetrics>> {
@@ -318,6 +328,7 @@ fn measure_function(
     let mut score = Score {
         complexity: 1,
         depth: 0,
+        bool_ops: 0,
     };
     let body = node.child_by_field_name("body").unwrap_or(node);
     measure_node(body, node.id(), language, source, 0, &mut score);
@@ -331,12 +342,15 @@ fn measure_function(
         depth: score.depth,
         lines: significant_lines(source, start, end, node),
         params: parameter_count(node, language, source),
+        bool_ops: score.bool_ops,
+        widget_depth: measure_widget_depth(node, language, source),
     }
 }
 
 struct Score {
     complexity: usize,
     depth: usize,
+    bool_ops: usize,
 }
 
 fn measure_node(
@@ -353,6 +367,11 @@ fn measure_node(
     if is_decision(node, language, source) {
         score.complexity += 1;
     }
+    if is_boolean_chain_root(node, language, source) {
+        score.bool_ops = score
+            .bool_ops
+            .max(boolean_operators_in_chain(node, root_id, language, source));
+    }
     let opens = opens_depth(node, language) && !is_else_if(node);
     let next_depth = depth + usize::from(opens);
     score.depth = score.depth.max(next_depth);
@@ -360,6 +379,203 @@ fn measure_node(
     for child in node.named_children(&mut cursor) {
         measure_node(child, root_id, language, source, next_depth, score);
     }
+}
+
+fn is_boolean_chain_root(node: Node<'_>, language: Language, source: &str) -> bool {
+    if !is_boolean_operator(node, language, source) {
+        return false;
+    }
+    let mut parent = node.parent();
+    while parent.is_some_and(|item| item.kind() == "parenthesized_expression") {
+        parent = parent.and_then(|item| item.parent());
+    }
+    !parent.is_some_and(|item| is_boolean_operator(item, language, source))
+}
+
+fn boolean_operators_in_chain(
+    node: Node<'_>,
+    root_id: usize,
+    language: Language,
+    source: &str,
+) -> usize {
+    if node.id() != root_id
+        && (is_function(language, node.kind()) || is_conditional_expression(node.kind()))
+    {
+        return 0;
+    }
+    let own = usize::from(is_boolean_operator(node, language, source));
+    let mut cursor = node.walk();
+    own + node
+        .named_children(&mut cursor)
+        .map(|child| boolean_operators_in_chain(child, root_id, language, source))
+        .sum::<usize>()
+}
+
+fn is_conditional_expression(kind: &str) -> bool {
+    matches!(kind, "conditional_expression" | "ternary_expression")
+}
+
+fn is_boolean_operator(node: Node<'_>, language: Language, source: &str) -> bool {
+    match language {
+        Language::JavaScript | Language::TypeScript | Language::Tsx => {
+            matches!(
+                node.kind(),
+                "binary_expression" | "augmented_assignment_expression"
+            ) && has_operator(node, source, &["&&", "||", "??", "&&=", "||=", "??="])
+        }
+        Language::Dart => {
+            matches!(
+                node.kind(),
+                "logical_and_expression" | "logical_or_expression" | "if_null_expression"
+            ) || node.kind() == "assignment_expression"
+                && has_operator(node, source, &["&&=", "||=", "??="])
+        }
+        Language::Rust | Language::Go => {
+            node.kind() == "binary_expression" && has_operator(node, source, &["&&", "||"])
+        }
+        Language::Python => {
+            node.kind() == "boolean_operator" && has_operator(node, source, &["and", "or"])
+        }
+        Language::Svelte => false,
+    }
+}
+
+fn measure_widget_depth(node: Node<'_>, language: Language, source: &str) -> usize {
+    if language != Language::Dart
+        || node.kind() != "method_declaration"
+        || direct_name(node, source) != Some("build")
+    {
+        return 0;
+    }
+    let body = node.child_by_field_name("body").unwrap_or(node);
+    widget_depth_in_node(body, node.id(), source, 0, false)
+}
+
+fn widget_depth_in_node(
+    node: Node<'_>,
+    root_id: usize,
+    source: &str,
+    depth: usize,
+    closure_slot: bool,
+) -> usize {
+    if node.id() != root_id && is_function(Language::Dart, node.kind()) {
+        if node.kind() != "function_expression" || !closure_slot {
+            return depth;
+        }
+        let body = node.child_by_field_name("body").unwrap_or(node);
+        return widget_depth_in_node(body, root_id, source, depth, false);
+    }
+    if is_constructor_like(node, source) {
+        return widget_depth_in_constructor(node, root_id, source, depth + 1);
+    }
+    let mut maximum = depth;
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        maximum = maximum.max(widget_depth_in_node(
+            child,
+            root_id,
+            source,
+            depth,
+            closure_slot,
+        ));
+    }
+    maximum
+}
+
+fn widget_depth_in_constructor(
+    node: Node<'_>,
+    root_id: usize,
+    source: &str,
+    depth: usize,
+) -> usize {
+    let Some(arguments) = node.child_by_field_name("arguments") else {
+        return depth;
+    };
+    let mut maximum = depth;
+    let mut cursor = arguments.walk();
+    for argument in arguments.named_children(&mut cursor) {
+        let value = if argument.kind() == "named_argument" {
+            let mut argument_cursor = argument.walk();
+            let mut children = argument.named_children(&mut argument_cursor);
+            let Some(label) = children.next() else {
+                continue;
+            };
+            let name = node_text(label, source).trim_end_matches(':');
+            if !WIDGET_SLOTS.contains(&name) {
+                continue;
+            }
+            children.next()
+        } else {
+            Some(argument)
+        };
+        if let Some(value) = value {
+            maximum = maximum.max(widget_depth_in_node(value, root_id, source, depth, true));
+        }
+    }
+    maximum
+}
+
+const WIDGET_SLOTS: &[&str] = &[
+    "child",
+    "children",
+    "body",
+    "appBar",
+    "title",
+    "subtitle",
+    "leading",
+    "trailing",
+    "icon",
+    "content",
+    "actions",
+    "bottomNavigationBar",
+    "floatingActionButton",
+    "drawer",
+    "endDrawer",
+    "flexibleSpace",
+    "bottom",
+    "header",
+    "footer",
+    "label",
+    "prefix",
+    "suffix",
+    "prefixIcon",
+    "suffixIcon",
+    "separator",
+    "placeholder",
+    "builder",
+    "itemBuilder",
+    "separatorBuilder",
+];
+
+fn is_constructor_like(node: Node<'_>, source: &str) -> bool {
+    match node.kind() {
+        "const_object_expression" | "new_expression" => true,
+        "constructor_invocation" => node
+            .child_by_field_name("type")
+            .is_some_and(|callee| starts_ascii_uppercase(node_text(callee, source))),
+        "call_expression" => node
+            .child_by_field_name("function")
+            .and_then(leftmost_callee_identifier)
+            .is_some_and(|callee| starts_ascii_uppercase(node_text(callee, source))),
+        _ => false,
+    }
+}
+
+fn leftmost_callee_identifier(node: Node<'_>) -> Option<Node<'_>> {
+    match node.kind() {
+        "identifier" | "type_identifier" => Some(node),
+        "call_expression" => node
+            .child_by_field_name("function")
+            .and_then(leftmost_callee_identifier),
+        "member_expression" | "null_aware_member_expression" => node
+            .child_by_field_name("object")
+            .and_then(leftmost_callee_identifier),
+        _ => None,
+    }
+}
+
+fn starts_ascii_uppercase(text: &str) -> bool {
+    text.as_bytes().first().is_some_and(u8::is_ascii_uppercase)
 }
 
 fn is_function(language: Language, kind: &str) -> bool {
@@ -601,13 +817,20 @@ fn direct_name<'source>(node: Node<'_>, source: &'source str) -> Option<&'source
     .and_then(|named| named.utf8_text(source.as_bytes()).ok())
 }
 
+/// Dart methods carry their annotations (`@override`) before the signature, and
+/// an annotation has its own `name` field. Skip them so the method's own name
+/// wins.
+fn annotation_kind(kind: &str) -> bool {
+    kind == "metadata" || kind.contains("annotation")
+}
+
 fn descendant_field<'a>(node: Node<'a>, field: &str) -> Option<Node<'a>> {
     if let Some(found) = node.child_by_field_name(field) {
         return Some(found);
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        if child.kind().contains("body") {
+        if child.kind().contains("body") || annotation_kind(child.kind()) {
             continue;
         }
         if let Some(found) = descendant_field(child, field) {
@@ -618,16 +841,7 @@ fn descendant_field<'a>(node: Node<'a>, field: &str) -> Option<Node<'a>> {
 }
 
 fn qualify_method(node: Node<'_>, language: Language, name: &str, source: &str) -> String {
-    let method = matches!(
-        node.kind(),
-        "method_definition" | "method_declaration" | "getter_declaration" | "setter_declaration"
-    ) || language == Language::Python
-        && node.kind() == "function_definition"
-        && has_ancestor(node, "class_definition")
-        || language == Language::Rust
-            && node.kind() == "function_item"
-            && has_ancestor(node, "impl_item");
-    if !method {
+    if !is_method(node, language) {
         return name.to_owned();
     }
     if language == Language::Go {
@@ -659,6 +873,19 @@ fn qualify_method(node: Node<'_>, language: Language, name: &str, source: &str) 
         parent = item.parent();
     }
     name.to_owned()
+}
+
+fn is_method(node: Node<'_>, language: Language) -> bool {
+    if matches!(
+        node.kind(),
+        "method_definition" | "method_declaration" | "getter_declaration" | "setter_declaration"
+    ) {
+        return true;
+    }
+    if language == Language::Python && node.kind() == "function_definition" {
+        return has_ancestor(node, "class_definition");
+    }
+    language == Language::Rust && node.kind() == "function_item" && has_ancestor(node, "impl_item")
 }
 
 fn type_owner<'a>(node: Node<'_>, language: Language, source: &'a str) -> Option<&'a str> {
@@ -866,6 +1093,7 @@ fn measure_template(root: Node<'_>, source: &str) -> FunctionMetrics {
     let mut score = Score {
         complexity: 1,
         depth: 0,
+        bool_ops: 0,
     };
     measure_svelte_node(root, source, 0, &mut score);
     FunctionMetrics {
@@ -876,6 +1104,8 @@ fn measure_template(root: Node<'_>, source: &str) -> FunctionMetrics {
         depth: score.depth,
         lines: 0,
         params: 0,
+        bool_ops: score.bool_ops,
+        widget_depth: 0,
     }
 }
 
@@ -890,7 +1120,9 @@ fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut S
         score.complexity += 1;
     }
     if node.kind() == "svelte_raw_text" {
-        score.complexity += expression_decisions(node_text(node, source));
+        let expression = node_text(node, source);
+        score.complexity += expression_decisions(expression);
+        score.bool_ops = score.bool_ops.max(expression_bool_ops(expression));
     }
     let opens = matches!(
         node.kind(),
@@ -902,6 +1134,14 @@ fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut S
     for child in node.named_children(&mut cursor) {
         measure_svelte_node(child, source, next_depth, score);
     }
+}
+
+fn expression_bool_ops(expression: &str) -> usize {
+    let wrapped = format!("function expression() {{ return ({expression}); }}");
+    parse_with_offset(Language::JavaScript, &wrapped, 0)
+        .ok()
+        .and_then(|functions| functions.first().map(|function| function.bool_ops))
+        .unwrap_or(0)
 }
 
 fn expression_decisions(line: &str) -> usize {
@@ -1069,6 +1309,70 @@ mod tests {
         .unwrap();
         assert_eq!(functions[0].complexity, 2);
         assert_eq!(functions[1].complexity, 1);
+        assert_eq!(functions[0].bool_ops, 1);
+        assert_eq!(functions[1].bool_ops, 0);
+    }
+
+    #[test]
+    fn boolean_chains_cross_parentheses_but_not_ternaries_or_closures() {
+        let cases = [
+            (
+                Language::JavaScript,
+                "function f(a,b,c,d,e){ return a && (b || c) && (() => d || e)(); }",
+            ),
+            (
+                Language::Dart,
+                "bool f(a,b,c,d,e) => a && (b || c) && (() => d || e)();",
+            ),
+            (
+                Language::Rust,
+                "fn f(a:bool,b:bool,c:bool,d:bool,e:bool)->bool { a && (b || c) && (|| d || e)() }",
+            ),
+            (
+                Language::Python,
+                "def f(a,b,c,d,e):\n    return a and (b or c) and (lambda: d or e)()\n",
+            ),
+            (
+                Language::Go,
+                "func f(a,b,c,d,e bool) bool { return a && (b || c) && func() bool { return d || e }() }",
+            ),
+        ];
+        for (language, source) in cases {
+            let functions = parse_source(language, source).unwrap();
+            assert_eq!(functions[0].bool_ops, 3, "{}", language.name());
+            assert_eq!(functions[1].bool_ops, 1, "{} closure", language.name());
+        }
+
+        let ternary = parse_source(
+            Language::TypeScript,
+            "function f(a:boolean,b:boolean,c:boolean,d:boolean,e:boolean){ return (a && b) ? (c || d) : e; }",
+        )
+        .unwrap();
+        assert_eq!(ternary[0].bool_ops, 1);
+    }
+
+    #[test]
+    fn dart_widget_depth_follows_only_widget_slots_in_build_methods() {
+        let functions = parse_source(
+            Language::Dart,
+            r#"
+class Screen {
+  Widget build(BuildContext context) => Column(children: [
+    Padding(padding: EdgeInsets.all(8), child: Builder(
+      builder: (context) => Theme.of(context).enabled
+          ? Center(child: Text('ok'))
+          : const SizedBox(),
+    )),
+    DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(4))),
+  ]);
+  Widget helper() => Column(child: Text('no'));
+}
+"#,
+        )
+        .unwrap();
+        assert_eq!(functions[0].widget_depth, 5);
+        assert_eq!(functions[1].widget_depth, 0);
+        assert_eq!(functions[2].widget_depth, 0);
     }
 
     #[test]

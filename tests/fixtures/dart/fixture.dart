@@ -195,3 +195,40 @@ int commentLines(int x) {
   /* comment-only */
   /* inline */ return x;
 }
+
+bool boolChain(bool a, bool b, bool c, bool d) => a && (b || c) && d;
+
+bool ternaryBreak(bool a, bool b, bool c, bool d, bool e) =>
+    (a && b) ? (c || d) : e;
+
+class ReadabilityWidgets {
+  Widget build(BuildContext context) => Column(children: [
+    Padding(
+      padding: EdgeInsets.all(8),
+      child: Center(child: Text('counted')),
+    ),
+    DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
+    ),
+    Container(child: BoxDecoration(child: Text('counted value'))),
+    Builder(builder: (context) => Center(child: Text('closure'))),
+  ]);
+
+  Widget buildValueOnly(BuildContext context) => Padding(
+    padding: BoxDecoration(child: Text('not traversed')),
+  );
+
+  Widget helper(BuildContext context) => Column(child: Text('not build'));
+}
+
+class IgnoredValueWidget {
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(child: Center(child: Text('ignored'))),
+  );
+}
+
+class CountedValueWidget {
+  Widget build(BuildContext context) => Container(
+    child: BoxDecoration(child: Center(child: Text('counted'))),
+  );
+}

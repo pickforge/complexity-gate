@@ -68,6 +68,37 @@ fn check_exit_codes_follow_contract() {
 }
 
 #[test]
+fn readability_metrics_use_default_limits_and_json_violation_shape() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("boolean.js"),
+        "function opaque(a,b,c,d,e) { return a && b && c && d && e; }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("widget.dart"),
+        "class Screen { Widget build(context) => A(child: B(child: C(child: D(child: E(child: F(child: G(child: H(child: I())))))))); }\n",
+    )
+    .unwrap();
+
+    let output = command_output(
+        dir.path(),
+        &["check", "--format", "json", "boolean.js", "widget.dart"],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let violations = report["violations"].as_array().unwrap();
+    assert!(
+        violations.iter().any(|item| {
+            item["metric"] == "bool_ops" && item["value"] == 4 && item["limit"] == 3
+        })
+    );
+    assert!(violations.iter().any(|item| {
+        item["metric"] == "widget_depth" && item["value"] == 9 && item["limit"] == 7
+    }));
+}
+
+#[test]
 fn changed_results_are_repo_root_keyed_from_nested_cwd() {
     let dir = tempfile::tempdir().unwrap();
     let nested = dir.path().join("src/sub");

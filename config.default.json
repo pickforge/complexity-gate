@@ -1,17 +1,41 @@
 {
-  "limits": { "complexity": 15, "depth": 4, "lines": 100, "params": 6 },
+  "limits": {
+    "complexity": 15,
+    "depth": 4,
+    "lines": 100,
+    "params": 6,
+    "bool_ops": 3,
+    "widget_depth": 7
+  },
   "tests": {
     "patterns": [
-      "**/*.test.*", "**/*.spec.*", "**/*_test.go", "**/test_*.py", "**/*_test.py",
-      "**/*_test.dart", "**/test/**", "**/tests/**", "**/__tests__/**"
+      "**/*.test.*",
+      "**/*.spec.*",
+      "**/*_test.go",
+      "**/test_*.py",
+      "**/*_test.py",
+      "**/*_test.dart",
+      "**/test/**",
+      "**/tests/**",
+      "**/__tests__/**"
     ],
-    "exempt": ["lines"]
+    "exempt": [
+      "lines"
+    ]
   },
   "ignore": [
-    "**/node_modules/**", "**/dist/**", "**/build/**", "**/target/**",
-    "**/.svelte-kit/**", "**/*.g.dart", "**/*.freezed.dart", "**/*.min.js",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/target/**",
+    "**/.svelte-kit/**",
+    "**/*.g.dart",
+    "**/*.freezed.dart",
+    "**/*.min.js",
     "**/generated/**"
   ],
   "languages": {},
-  "hook": { "max_blocks": 3 }
+  "hook": {
+    "max_blocks": 3
+  }
 }

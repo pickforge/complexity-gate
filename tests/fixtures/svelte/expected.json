@@ -74,6 +74,20 @@
         "function": "commentLines",
         "line": 193,
         "complexity": 1
+      },
+      {
+        "function": "boolChain",
+        "line": 198,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "ternaryBreak",
+        "line": 202,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
       }
     ]
   },
@@ -84,7 +98,9 @@
       "complexity": 12,
       "depth": 3,
       "lines": 0,
-      "params": 0
+      "params": 0,
+      "bool_ops": 1,
+      "widget_depth": 0
     },
     {
       "function": "trivial",
@@ -92,7 +108,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "atLimit",
@@ -100,7 +118,9 @@
       "complexity": 15,
       "depth": 1,
       "lines": 17,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overComplexity",
@@ -108,7 +128,9 @@
       "complexity": 16,
       "depth": 1,
       "lines": 18,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overDepth",
@@ -116,7 +138,9 @@
       "complexity": 6,
       "depth": 5,
       "lines": 12,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overLines",
@@ -124,7 +148,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 102,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overParams",
@@ -132,7 +158,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 7
+      "params": 7,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "nested",
@@ -140,7 +168,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 4,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "inner",
@@ -148,7 +178,9 @@
       "complexity": 2,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "decisions",
@@ -156,7 +188,9 @@
       "complexity": 17,
       "depth": 1,
       "lines": 13,
-      "params": 1
+      "params": 1,
+      "bool_ops": 3,
+      "widget_depth": 0
     },
     {
       "function": "Counter.increment",
@@ -164,7 +198,9 @@
       "complexity": 2,
       "depth": 1,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "reviewCases",
@@ -172,7 +208,9 @@
       "complexity": 5,
       "depth": 1,
       "lines": 10,
-      "params": 2
+      "params": 2,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "<anonymous>",
@@ -180,7 +218,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "commentLines",
@@ -188,7 +228,29 @@
       "complexity": 1,
       "depth": 0,
       "lines": 3,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "boolChain",
+      "line": 198,
+      "complexity": 4,
+      "depth": 0,
+      "lines": 3,
+      "params": 4,
+      "bool_ops": 3,
+      "widget_depth": 0
+    },
+    {
+      "function": "ternaryBreak",
+      "line": 202,
+      "complexity": 4,
+      "depth": 0,
+      "lines": 3,
+      "params": 5,
+      "bool_ops": 1,
+      "widget_depth": 0
     }
   ]
 }

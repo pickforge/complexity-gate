@@ -190,3 +190,7 @@ fn comment_lines(ptr: &mut i32) -> i32 {
     /* inline */ *ptr += 1;
     *ptr
 }
+
+fn bool_chain(a: bool, b: bool, c: bool, d: bool) -> bool {
+    a && (b || c) && d
+}

@@ -10,6 +10,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 const DEFAULTS: &str = include_str!("../../../config.default.json");
+const LIMIT_KEYS: &[&str] = &[
+    "complexity",
+    "depth",
+    "lines",
+    "params",
+    "bool_ops",
+    "widget_depth",
+];
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +26,8 @@ pub struct Limits {
     pub depth: usize,
     pub lines: usize,
     pub params: usize,
+    pub bool_ops: usize,
+    pub widget_depth: usize,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -40,6 +50,8 @@ pub struct LimitOverrides {
     pub depth: Option<usize>,
     pub lines: Option<usize>,
     pub params: Option<usize>,
+    pub bool_ops: Option<usize>,
+    pub widget_depth: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
@@ -138,12 +150,7 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
         "",
         path,
     )?;
-    nested_keys(
-        object,
-        "limits",
-        &["complexity", "depth", "lines", "params"],
-        path,
-    )?;
+    nested_keys(object, "limits", LIMIT_KEYS, path)?;
     nested_keys(object, "tests", &["patterns", "exempt"], path)?;
     validate_test_exempt(object, path)?;
     nested_keys(object, "hook", &["max_blocks"], path)?;
@@ -193,12 +200,7 @@ fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> 
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("languages.{name} must be an object"))?;
         allowed(object, &["limits"], &format!("languages.{name}"), path)?;
-        nested_keys(
-            object,
-            "limits",
-            &["complexity", "depth", "lines", "params"],
-            path,
-        )?;
+        nested_keys(object, "limits", LIMIT_KEYS, path)?;
     }
     Ok(())
 }
@@ -249,6 +251,8 @@ impl Config {
             depth: overrides.depth.unwrap_or(self.limits.depth),
             lines: overrides.lines.unwrap_or(self.limits.lines),
             params: overrides.params.unwrap_or(self.limits.params),
+            bool_ops: overrides.bool_ops.unwrap_or(self.limits.bool_ops),
+            widget_depth: overrides.widget_depth.unwrap_or(self.limits.widget_depth),
         }
     }
 
@@ -288,6 +292,23 @@ mod tests {
         let limits = config.limits_for("rust");
         assert_eq!(limits.complexity, 4);
         assert_eq!(limits.depth, 4);
+        assert_eq!(limits.bool_ops, 3);
+        assert_eq!(limits.widget_depth, 7);
+    }
+
+    #[test]
+    fn readability_limits_accept_global_and_language_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"limits":{"bool_ops":2},"languages":{"dart":{"limits":{"widget_depth":5}}}}"#,
+        )
+        .unwrap();
+        let config = load_config(dir.path(), Some(&path)).unwrap().config;
+        assert_eq!(config.limits_for("javascript").bool_ops, 2);
+        assert_eq!(config.limits_for("dart").bool_ops, 2);
+        assert_eq!(config.limits_for("dart").widget_depth, 5);
     }
 
     #[test]
