@@ -123,6 +123,13 @@
         "complexity": 1,
         "hand_derived": true,
         "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "nullChain",
+        "line": 237,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "Base 1 plus four `??` decision operators; the four operators also form one bool_ops chain."
       }
     ]
   },
@@ -336,6 +343,16 @@
       "params": 1,
       "bool_ops": 0,
       "widget_depth": 4
+    },
+    {
+      "function": "nullChain",
+      "line": 237,
+      "complexity": 5,
+      "depth": 0,
+      "lines": 1,
+      "params": 5,
+      "bool_ops": 4,
+      "widget_depth": 0
     }
   ]
 }

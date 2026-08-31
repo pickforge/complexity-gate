@@ -36,6 +36,7 @@ struct ReferenceFunction {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct Expected {
     function: String,
     line: usize,
@@ -43,6 +44,8 @@ struct Expected {
     depth: usize,
     lines: usize,
     params: usize,
+    bool_ops: usize,
+    widget_depth: usize,
 }
 
 #[test]
@@ -159,6 +162,8 @@ impl From<FunctionMetrics> for Expected {
             depth: value.depth,
             lines: value.lines,
             params: value.params,
+            bool_ops: value.bool_ops,
+            widget_depth: value.widget_depth,
         }
     }
 }

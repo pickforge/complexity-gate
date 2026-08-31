@@ -232,3 +232,6 @@ class CountedValueWidget {
     child: BoxDecoration(child: Center(child: Text('counted'))),
   );
 }
+
+// Repeated `??` nests in the Dart grammar, so four operators form one chain.
+String nullChain(a, b, c, d, e) => a ?? b ?? c ?? d ?? e;
