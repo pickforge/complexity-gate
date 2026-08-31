@@ -95,7 +95,8 @@ this metric measures that nesting.
 
 A *constructor-like node* is:
 
-- a `const_object_expression`, `new_expression`, or `constructor_invocation`; or
+- a `const_object_expression` or `new_expression`; or
+- a `constructor_invocation` whose type starts with an ASCII uppercase letter; or
 - a call/invocation whose callee is an identifier whose first character is an
   ASCII uppercase letter (`Column(...)`); or
 - a call/invocation whose callee is a member/selector expression whose leftmost
@@ -104,6 +105,19 @@ A *constructor-like node* is:
 Leading underscores are trimmed before the uppercase test, so a private widget
 (`_Card(...)`, idiomatic for sub-widgets in a single file) counts like any
 other.
+
+A call whose callee subtree contains another call is a method chain, not a new
+layer: `Text('x').animate().fadeIn()` counts once, and
+`Container(child: Text('x')).animate()` counts two. Without this rule every
+chain link would add a layer, which would penalise `flutter_animate` and
+extension-method styles for nesting they do not create.
+
+One known undercount, inherent to the pinned grammar: for an arrow-bodied
+builder the grammar strands the returned widget inside the closure body while
+its arguments dangle on an outer call, so that widget itself is not counted
+(`Builder(builder: (c) => Wrapper(child: Center(child: Text('x'))))` scores 3,
+where the block-bodied equivalent scores 4). The error is one-sided and
+lenient, which is the safe direction for a gate.
 
 Counting the whole expression tree would inflate the score with value
 constructors — `EdgeInsets.all`, `BorderRadius.circular`, `BoxDecoration`,
@@ -138,9 +152,9 @@ would let those subtrees through.
 This is deliberately a syntactic proxy. Without type resolution the analyzer
 cannot prove that `Foo(...)` returns a `Widget`; the slot restriction is what
 keeps the proxy honest. Calibrated against 258 Flutter `build` methods (ConstruApp, 3d_portfolio,
-pickarena): median 4, p90 7, p95 7, max 10. The default of 7 fails 12 methods
-(4.7%) — the p95 boundary; a limit of 6 would fail 28 and a limit of 5 would
-fail 53. Both the uppercase rule and the slot list are part of
+pickarena): median 4, p90 6, p95 7, max 10. The default of 7 fails 6 methods
+(2.3%) — the genuine outliers; a limit of 6 would fail 23 (8.9%) and 5 would
+fail 48 (18.6%). Both the uppercase rule and the slot list are part of
 this contract — changing either changes every score, so they change only with a
 fixture update.
 

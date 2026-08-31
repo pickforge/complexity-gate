@@ -540,12 +540,29 @@ fn is_constructor_like(node: Node<'_>, source: &str) -> bool {
         "constructor_invocation" => node
             .child_by_field_name("type")
             .is_some_and(|callee| starts_ascii_uppercase(node_text(callee, source))),
+        // A call on the result of another call is a method chain
+        // (`Text('x').animate().fadeIn()`), not a new layer of widget. Only the
+        // innermost constructor of the chain counts.
+        "call_expression" if chained_call(node) => false,
         "call_expression" => node
             .child_by_field_name("function")
             .and_then(leftmost_callee_identifier)
             .is_some_and(|callee| starts_ascii_uppercase(node_text(callee, source))),
         _ => false,
     }
+}
+
+fn chained_call(node: Node<'_>) -> bool {
+    node.child_by_field_name("function")
+        .is_some_and(|callee| contains_call(callee))
+}
+
+fn contains_call(node: Node<'_>) -> bool {
+    if node.kind() == "call_expression" {
+        return true;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).any(|child| contains_call(child))
 }
 
 fn leftmost_callee_identifier(node: Node<'_>) -> Option<Node<'_>> {

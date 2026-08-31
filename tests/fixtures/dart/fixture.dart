@@ -248,3 +248,10 @@ class PrivateWidget {
   @override
   Widget build(BuildContext context) => _Card(padding: Ignored(child: Text('x')));
 }
+
+class ChainedWidget {
+  // A call on the result of another call is a method chain, not a new layer:
+  // only the innermost constructor of the chain counts.
+  @override
+  Widget build(BuildContext context) => Container(child: Text('x')).animate().fadeIn();
+}

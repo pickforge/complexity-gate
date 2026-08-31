@@ -151,6 +151,13 @@
         "complexity": 1,
         "hand_derived": true,
         "derivation": "_Card counts as a widget constructor (leading underscores trimmed); its padding: value does not."
+      },
+      {
+        "function": "ChainedWidget.build",
+        "line": 255,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Container and its Text child count; the .animate().fadeIn() chain links do not, because a call on the result of another call is not a new widget layer."
       }
     ]
   },
@@ -404,6 +411,16 @@
       "params": 1,
       "bool_ops": 0,
       "widget_depth": 1
+    },
+    {
+      "function": "ChainedWidget.build",
+      "line": 255,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 2,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 2
     }
   ]
 }
