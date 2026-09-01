@@ -286,6 +286,8 @@ fn add_violations(
         ("depth", function.depth, limits.depth),
         ("lines", function.lines, limits.lines),
         ("params", function.params, limits.params),
+        ("bool_ops", function.bool_ops, limits.bool_ops),
+        ("widget_depth", function.widget_depth, limits.widget_depth),
     ];
     for (metric, value, limit) in metrics {
         if value <= limit || test_file && config.tests.exempt.iter().any(|item| item == metric) {

@@ -195,3 +195,63 @@ int commentLines(int x) {
   /* comment-only */
   /* inline */ return x;
 }
+
+bool boolChain(bool a, bool b, bool c, bool d) => a && (b || c) && d;
+
+bool ternaryBreak(bool a, bool b, bool c, bool d, bool e) =>
+    (a && b) ? (c || d) : e;
+
+class ReadabilityWidgets {
+  Widget build(BuildContext context) => Column(children: [
+    Padding(
+      padding: EdgeInsets.all(8),
+      child: Center(child: Text('counted')),
+    ),
+    DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
+    ),
+    Container(child: BoxDecoration(child: Text('counted value'))),
+    Builder(builder: (context) => Center(child: Text('closure'))),
+  ]);
+
+  Widget buildValueOnly(BuildContext context) => Padding(
+    padding: BoxDecoration(child: Text('not traversed')),
+  );
+
+  Widget helper(BuildContext context) => Column(child: Text('not build'));
+}
+
+class IgnoredValueWidget {
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(child: Center(child: Text('ignored'))),
+  );
+}
+
+class CountedValueWidget {
+  Widget build(BuildContext context) => Container(
+    child: BoxDecoration(child: Center(child: Text('counted'))),
+  );
+}
+
+// Repeated `??` nests in the Dart grammar, so four operators form one chain.
+String nullChain(a, b, c, d, e) => a ?? b ?? c ?? d ?? e;
+
+class ArrowBuilderWidget {
+  // The grammar leaves the argument list dangling for arrow-bodied builders, so
+  // the slot filter has to apply during descent, not only at the constructor.
+  @override
+  Widget build(BuildContext context) =>
+      Builder(builder: (c) => Wrapper(padding: Ignored(child: Center(child: Text('x')))));
+}
+
+class PrivateWidget {
+  @override
+  Widget build(BuildContext context) => _Card(padding: Ignored(child: Text('x')));
+}
+
+class ChainedWidget {
+  // A call on the result of another call is a method chain, not a new layer:
+  // only the innermost constructor of the chain counts.
+  @override
+  Widget build(BuildContext context) => Container(child: Text('x')).animate().fadeIn();
+}

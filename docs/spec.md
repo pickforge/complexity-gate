@@ -18,6 +18,14 @@ in the PR, not decided silently.
   agent-side gate.
 - Cognitive complexity (v2 candidate).
 
+complexity-gate measures how hard code is to *read*. It does not enforce policy.
+Rules of the form "this API is banned", "errors must be typed", "no `any`", or
+"no `unwrap()`" belong to clippy, ESLint, oxlint, and `dart analyze`, which
+already own them, resolve types, and see the whole program. Such rules need
+per-language allowlists and cross-file resolution that a single-file syntactic
+analyzer cannot provide honestly, so they stay out of scope even when the
+underlying problem is real.
+
 ## Metrics (per function)
 
 | Metric | Definition | Default limit |
@@ -26,6 +34,8 @@ in the PR, not decided silently.
 | `depth` | max nesting of control-flow constructs (see below), nested functions reset to 0 | 4 |
 | `lines` | lines from the function's first to last line inclusive, minus blank lines and comment-only lines (every non-whitespace byte inside comment nodes); nested functions included | 100 |
 | `params` | declared parameters; a destructuring pattern counts as 1; receiver/`self`/`this` excluded | 6 |
+| `bool_ops` | max short-circuit boolean operators in a single expression (see below) | 3 |
+| `widget_depth` | Dart only: max nesting of widget constructors in a `build` method (see below) | 7 |
 
 A violation is `value > limit`. Test files (see config) are exempt from `lines`
 only.
@@ -53,6 +63,100 @@ as in ESLint `max-depth`), Python `with`. An `else if` / `elif` chain stays at t
 of its first `if`. Conditional expressions and boolean operators do not add depth.
 A nested function starts again at 0 and its body does not contribute to the
 enclosing function's depth.
+
+### Boolean operator density
+
+`bool_ops` measures the widest single boolean expression in a function, not the
+function's total. A function can sit far below the `complexity` limit and still
+contain one opaque five-clause condition; cyclomatic spreads those operators
+across the whole function, this metric does not.
+
+A *boolean chain root* is a short-circuit boolean operator node (the same
+operators the decision-point rules list: `&&`, `||`, `??`, Python `and`/`or`,
+and the assignment forms `&&=`, `||=`, `??=`) whose parent is not itself one of
+those operators. For each chain root, count every short-circuit boolean operator
+in its subtree, not descending into nested function or closure bodies or into
+conditional expressions.
+`bool_ops` is the maximum over all chain roots in the function; a function with
+no boolean operator scores 0.
+
+Parenthesised grouping does not break a chain: `a && (b || c)` is one chain of
+2. A conditional expression does break one, because a ternary is not a boolean
+operator: in `(a && b) ? (c || d) : e` the two chains score 1 each.
+
+Nested functions are measured separately, as with every other metric.
+
+### Widget depth
+
+`widget_depth` applies only to Dart, and only to methods named `build`. Every
+other function scores 0. The existing `depth` metric counts control flow, so a
+`build` method with no branching can nest ten visual layers and stay green;
+this metric measures that nesting.
+
+A *constructor-like node* is:
+
+- a `const_object_expression` or `new_expression`; or
+- a `constructor_invocation` whose type starts with an ASCII uppercase letter; or
+- a call/invocation whose callee is an identifier whose first character is an
+  ASCII uppercase letter (`Column(...)`); or
+- a call/invocation whose callee is a member/selector expression whose leftmost
+  identifier starts with an ASCII uppercase letter (`Theme.of(...)`).
+
+Leading underscores are trimmed before the uppercase test, so a private widget
+(`_Card(...)`, idiomatic for sub-widgets in a single file) counts like any
+other.
+
+A call whose callee subtree contains another call is a method chain, not a new
+layer: `Text('x').animate().fadeIn()` counts once, and
+`Container(child: Text('x')).animate()` counts two. Without this rule every
+chain link would add a layer, which would penalise `flutter_animate` and
+extension-method styles for nesting they do not create.
+
+One known undercount, inherent to the pinned grammar: for an arrow-bodied
+builder the grammar strands the returned widget inside the closure body while
+its arguments dangle on an outer call, so that widget itself is not counted
+(`Builder(builder: (c) => Wrapper(child: Center(child: Text('x'))))` scores 3,
+where the block-bodied equivalent scores 4). The error is one-sided and
+lenient, which is the safe direction for a gate.
+
+Counting the whole expression tree would inflate the score with value
+constructors — `EdgeInsets.all`, `BorderRadius.circular`, `BoxDecoration`,
+`TextStyle` — which are configuration, not visual nesting. Roughly a fifth of
+constructor-like nodes in a typical Flutter corpus are such values. Depth is
+therefore carried only through *widget slots*:
+
+- every positional argument of a constructor-like node; and
+- every named argument whose name is in the widget-slot list below; and
+- collection elements (`children: [...]`) and the bodies of closures passed
+  into either of the above (`itemBuilder: (c, i) => ...`).
+
+Widget-slot argument names:
+
+`child`, `children`, `body`, `appBar`, `title`, `subtitle`, `leading`,
+`trailing`, `icon`, `content`, `actions`, `bottomNavigationBar`,
+`floatingActionButton`, `drawer`, `endDrawer`, `flexibleSpace`, `bottom`,
+`header`, `footer`, `label`, `prefix`, `suffix`, `prefixIcon`, `suffixIcon`,
+`separator`, `placeholder`, `builder`, `itemBuilder`, `separatorBuilder`.
+
+Starting at 0, increment on entering a constructor-like node reached through a
+widget slot, and report the maximum reached on any path. Do not descend into
+nested *named* function declarations; do descend into closures passed to widget
+slots. A named argument whose label is not a widget slot (`padding:`, `decoration:`,
+`style:`, `duration:`) is not counted and its subtree is not traversed for this
+metric. This test is applied to every named argument encountered during the
+walk, not only to the arguments of a recognised constructor: the Dart grammar
+leaves the argument list dangling for arrow-bodied builders
+(`builder: (c) => Foo(padding: ...)`), so filtering only at the constructor
+would let those subtrees through.
+
+This is deliberately a syntactic proxy. Without type resolution the analyzer
+cannot prove that `Foo(...)` returns a `Widget`; the slot restriction is what
+keeps the proxy honest. Calibrated against 258 Flutter `build` methods (ConstruApp, 3d_portfolio,
+pickarena): median 4, p90 6, p95 7, max 10. The default of 7 fails 6 methods
+(2.3%) — the genuine outliers; a limit of 6 would fail 23 (8.9%) and 5 would
+fail 48 (18.6%). Both the uppercase rule and the slot list are part of
+this contract — changing either changes every score, so they change only with a
+fixture update.
 
 ### Function identification
 

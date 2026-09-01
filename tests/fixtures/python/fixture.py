@@ -191,3 +191,9 @@ def review_cases(values, x):
 def comment_lines(x):
     # comment-only
     return x  # inline comment
+
+def bool_chain(a, b, c, d):
+    return a and (b or c) and d
+
+def ternary_break(a, b, c, d, flag):
+    return (a and b) if flag else (c or d)

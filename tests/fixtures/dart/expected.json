@@ -67,6 +67,97 @@
         "function": "commentLines",
         "line": 194,
         "complexity": 1
+      },
+      {
+        "function": "boolChain",
+        "line": 199,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "ternaryBreak",
+        "line": 201,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "ReadabilityWidgets.build",
+        "line": 205,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "<anonymous>",
+        "line": 214,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "ReadabilityWidgets.buildValueOnly",
+        "line": 217,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "ReadabilityWidgets.helper",
+        "line": 221,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "IgnoredValueWidget.build",
+        "line": 225,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "CountedValueWidget.build",
+        "line": 231,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "nullChain",
+        "line": 237,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "Base 1 plus four `??` decision operators; the four operators also form one bool_ops chain."
+      },
+      {
+        "function": "ArrowBuilderWidget.build",
+        "line": 242,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Arrow-bodied builder: Builder counts once; the padding: subtree is not a widget slot, so Ignored/Center/Text do not count."
+      },
+      {
+        "function": "<anonymous>",
+        "line": 244,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Builder callback measured as its own function."
+      },
+      {
+        "function": "PrivateWidget.build",
+        "line": 248,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "_Card counts as a widget constructor (leading underscores trimmed); its padding: value does not."
+      },
+      {
+        "function": "ChainedWidget.build",
+        "line": 255,
+        "complexity": 1,
+        "hand_derived": true,
+        "derivation": "Container and its Text child count; the .animate().fadeIn() chain links do not, because a call on the result of another call is not a new widget layer."
       }
     ]
   },
@@ -77,7 +168,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "atLimit",
@@ -85,7 +178,9 @@
       "complexity": 15,
       "depth": 1,
       "lines": 17,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overComplexity",
@@ -93,7 +188,9 @@
       "complexity": 16,
       "depth": 1,
       "lines": 18,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overDepth",
@@ -101,7 +198,9 @@
       "complexity": 6,
       "depth": 5,
       "lines": 12,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overLines",
@@ -109,7 +208,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 102,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "overParams",
@@ -117,7 +218,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 7
+      "params": 7,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "nested",
@@ -125,7 +228,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 4,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "inner",
@@ -133,7 +238,9 @@
       "complexity": 2,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "decisions",
@@ -141,7 +248,9 @@
       "complexity": 17,
       "depth": 1,
       "lines": 15,
-      "params": 2
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
     },
     {
       "function": "Counter.increment",
@@ -149,7 +258,9 @@
       "complexity": 2,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "reviewCases",
@@ -157,7 +268,9 @@
       "complexity": 5,
       "depth": 1,
       "lines": 10,
-      "params": 2
+      "params": 2,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "<anonymous>",
@@ -165,7 +278,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "commentLines",
@@ -173,7 +288,139 @@
       "complexity": 1,
       "depth": 0,
       "lines": 3,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "boolChain",
+      "line": 199,
+      "complexity": 4,
+      "depth": 0,
+      "lines": 1,
+      "params": 4,
+      "bool_ops": 3,
+      "widget_depth": 0
+    },
+    {
+      "function": "ternaryBreak",
+      "line": 201,
+      "complexity": 4,
+      "depth": 0,
+      "lines": 2,
+      "params": 5,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "ReadabilityWidgets.build",
+      "line": 205,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 11,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 4
+    },
+    {
+      "function": "<anonymous>",
+      "line": 214,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "ReadabilityWidgets.buildValueOnly",
+      "line": 217,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "ReadabilityWidgets.helper",
+      "line": 221,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "IgnoredValueWidget.build",
+      "line": 225,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 1
+    },
+    {
+      "function": "CountedValueWidget.build",
+      "line": 231,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 4
+    },
+    {
+      "function": "nullChain",
+      "line": 237,
+      "complexity": 5,
+      "depth": 0,
+      "lines": 1,
+      "params": 5,
+      "bool_ops": 4,
+      "widget_depth": 0
+    },
+    {
+      "function": "ArrowBuilderWidget.build",
+      "line": 242,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 1
+    },
+    {
+      "function": "<anonymous>",
+      "line": 244,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "PrivateWidget.build",
+      "line": 248,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 2,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 1
+    },
+    {
+      "function": "ChainedWidget.build",
+      "line": 255,
+      "complexity": 1,
+      "depth": 0,
+      "lines": 2,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 2
     }
   ]
 }

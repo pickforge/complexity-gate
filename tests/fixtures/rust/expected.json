@@ -70,6 +70,13 @@
         "complexity": 1,
         "hand_derived": true,
         "derivation": "base complexity 1; the closure has no decision points"
+      },
+      {
+        "function": "bool_chain",
+        "line": 194,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
       }
     ]
   },
@@ -80,7 +87,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "at_limit",
@@ -88,7 +97,9 @@
       "complexity": 15,
       "depth": 1,
       "lines": 17,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "over_complexity",
@@ -96,7 +107,9 @@
       "complexity": 16,
       "depth": 1,
       "lines": 18,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "over_depth",
@@ -104,7 +117,9 @@
       "complexity": 6,
       "depth": 5,
       "lines": 14,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "over_lines",
@@ -112,7 +127,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 102,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "over_params",
@@ -120,7 +137,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 7
+      "params": 7,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "nested",
@@ -128,7 +147,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 4,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "inner",
@@ -136,7 +157,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "decisions",
@@ -144,7 +167,9 @@
       "complexity": 12,
       "depth": 1,
       "lines": 11,
-      "params": 2
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
     },
     {
       "function": "review_cases",
@@ -152,7 +177,9 @@
       "complexity": 5,
       "depth": 1,
       "lines": 10,
-      "params": 3
+      "params": 3,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "<anonymous>",
@@ -160,7 +187,9 @@
       "complexity": 1,
       "depth": 0,
       "lines": 1,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
     },
     {
       "function": "comment_lines",
@@ -168,7 +197,19 @@
       "complexity": 1,
       "depth": 0,
       "lines": 4,
-      "params": 1
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "bool_chain",
+      "line": 194,
+      "complexity": 4,
+      "depth": 0,
+      "lines": 3,
+      "params": 4,
+      "bool_ops": 3,
+      "widget_depth": 0
     }
   ]
 }

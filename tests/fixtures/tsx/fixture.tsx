@@ -193,3 +193,11 @@ function commentLines(x: number): number {
   /* comment-only */
   /* inline */ return x;
 }
+
+function boolChain(a: boolean, b: boolean, c: boolean, d: boolean): boolean {
+  return a && (b || c) && d;
+}
+
+function ternaryBreak(a: boolean, b: boolean, c: boolean, d: boolean, e: boolean): boolean {
+  return (a && b) ? (c || d) : e;
+}

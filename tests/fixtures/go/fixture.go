@@ -193,3 +193,7 @@ func commentLines(x int) int {
 	/* comment-only */
 	/* inline */ return x
 }
+
+func boolChain(a, b, c, d bool) bool {
+	return a && (b || c) && d
+}
