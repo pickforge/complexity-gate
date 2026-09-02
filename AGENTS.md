@@ -1,27 +1,21 @@
 # complexity-gate
 
-Deterministic cyclomatic-complexity gate for coding agents. `docs/spec.md` is the
-contract: implement to it, and report any deviation in the PR instead of deciding
-silently.
+Rust CLI that measures per-function complexity with tree-sitter and blocks coding agents from finishing while functions they touched are over the limits. `docs/spec.md` is the contract; if you have to deviate from it, say so in the PR.
 
-- Test-first: every language table change comes with a golden fixture in
-  `tests/fixtures/<language>/` and its `expected.json`.
-- Run gates with exact commands: `cargo test --workspace --locked --all-targets`,
-  `cargo clippy --workspace --all-targets -- -D warnings`, `cargo llvm-cov`.
-- Never lower a limit, coverage floor, or clippy threshold to get green.
-- The binary gates its own code: `cargo run -- check crates` must pass.
-- Workspace policy: read `../AGENTS.md` (Pickforge workspace) and use the
-  `plan-issue` workflow — GitHub Issues track plan and progress.
+Gates, exactly as CI runs them:
 
-## Lessons from review
+```
+cargo test --workspace --locked --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+cargo run -- check crates
+cargo llvm-cov --workspace --locked --fail-under-lines 89
+```
 
-- `--changed` takes its file set straight from Git (diff post-image + untracked)
-  and resolves against the repo root; never derive it by walking the cwd, and
-  never let `.gitignore` filter it.
-- Never classify syntax by text prefixes (`starts_with("default")`, operator
-  substrings); use node kinds, fields, or token children. Text scans over-count
-  in string literals and under-count real identifiers.
-- Coverage floors are actual line coverage rounded down (ratchet rule), not
-  actual minus a margin.
-- Every metric rule needs a golden case per language, including the negative
-  case (operator inside a string, unbraced `else <loop>`, `_ when` guard).
+Worth knowing:
+
+- Don't lower a limit, the coverage floor or a clippy threshold to get green. The floor is a ratchet: raise it to the actual coverage, rounded down.
+- Any change to the language tables or metric rules needs a golden fixture case in `tests/fixtures/<language>/expected.json`, including the negative case.
+- `--changed` gets its files from Git itself (diff post-image plus untracked), resolved against the repo root. Don't walk the cwd, and don't let `.gitignore` filter it.
+- Classify syntax by tree-sitter node kinds and fields, never by text prefixes or operator substrings.
+- Loop-guard state lives in `~/.pickforge/complexity-gate/` (`COMPLEXITY_GATE_HOME` overrides).
+- Bumping the workspace version also means bumping the `=x.y.z` pin on `complexity-gate-core` in `crates/cli/Cargo.toml`.
