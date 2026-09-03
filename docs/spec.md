@@ -1,7 +1,7 @@
 # complexity-gate — specification v1
 
 One static binary that measures function complexity with tree-sitter and blocks
-coding agents (Claude Code, Codex, Pi) from finishing while the functions they
+coding agents from finishing while the functions they
 changed exceed the limits. No external linters. Manual counting by a model is
 never an accepted measurement.
 
@@ -229,6 +229,8 @@ Binary: `complexity-gate`.
 complexity-gate check [--changed] [--format text|json] [--config <path>] [paths…]
 complexity-gate hook claude
 complexity-gate hook codex
+complexity-gate hook cursor
+complexity-gate hook grok
 complexity-gate init
 complexity-gate doctor [--coverage]
 complexity-gate --version
@@ -245,7 +247,7 @@ complexity-gate --version
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
   falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
-  Hook mode (`hook claude|codex`) does not fall back: outside a Git repository
+  Hook mode (`hook claude|codex|cursor|grok`) does not fall back: outside a Git repository
   it prints a `note: hook skipped` line, emits no block, and a Stop resets the
   loop counter, so a session running from a non-repo cwd is never gated on the
   whole tree.
@@ -325,6 +327,22 @@ contract differ; implement the closest equivalents (post-edit feedback, stop
 block) per the current Codex hooks documentation and record the mapping and
 limitations in `docs/hooks.md`. Where Codex cannot block a stop, the hook must
 still return the report as feedback.
+
+### `hook cursor`
+
+Reads Cursor's native hook JSON. `afterFileEdit` checks the top-level
+`file_path`; findings are written to stderr because that event is passive.
+`stop` checks changed functions when `status` is `completed` and returns a
+`followup_message` on violations. Aborted and failed stops are ignored. The
+working directory comes from the first `workspace_roots` entry or
+`CURSOR_PROJECT_DIR`.
+
+### `hook grok`
+
+Reads Grok's native camel-case hook JSON. `post_tool_use` checks edits and writes
+findings to stderr for the hook annotation. `stop` checks changed functions and
+blocks with exit 2 and the report on stderr. The working directory comes from
+`workspaceRoot` or `GROK_WORKSPACE_ROOT`.
 
 ### `init`
 

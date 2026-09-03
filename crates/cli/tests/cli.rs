@@ -395,13 +395,65 @@ fn both_hook_commands_parse_current_post_tool_input() {
     }
 }
 
+#[test]
+fn cursor_and_grok_hooks_follow_native_output_contracts() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.js");
+    fs::write(&file, "function bad(x) { return x; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "bad.js"]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&file, complex_function()).unwrap();
+
+    let cursor_edit = serde_json::json!({
+        "hook_event_name":"afterFileEdit", "conversation_id":"cursor-edit",
+        "workspace_roots":[dir.path()], "file_path":file
+    })
+    .to_string();
+    let cursor_edit_output = hook_output_for(state.path(), "cursor", &cursor_edit);
+    assert!(cursor_edit_output.status.success());
+    assert!(String::from_utf8_lossy(&cursor_edit_output.stderr).contains("FAIL bad.js"));
+
+    let cursor_stop = serde_json::json!({
+        "hook_event_name":"stop", "conversation_id":"cursor-stop",
+        "workspace_roots":[dir.path()], "status":"completed"
+    })
+    .to_string();
+    let cursor_stop_output = hook_output_for(state.path(), "cursor", &cursor_stop);
+    assert!(cursor_stop_output.status.success());
+    let cursor_feedback: serde_json::Value =
+        serde_json::from_slice(&cursor_stop_output.stdout).unwrap();
+    assert!(cursor_feedback["followup_message"]
+        .as_str()
+        .unwrap()
+        .contains("Refactor the listed functions"));
+
+    let grok_stop = serde_json::json!({
+        "hookEventName":"stop", "sessionId":"grok-stop",
+        "workspaceRoot":dir.path()
+    })
+    .to_string();
+    let grok_stop_output = hook_output_for(state.path(), "grok", &grok_stop);
+    assert_eq!(grok_stop_output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&grok_stop_output.stderr).contains("Refactor the listed functions")
+    );
+}
+
 fn command_output(cwd: &Path, args: &[&str]) -> Output {
     binary().current_dir(cwd).args(args).output().unwrap()
 }
 
 fn hook_output(state: &Path, input: &str) -> Output {
+    hook_output_for(state, "claude", input)
+}
+
+fn hook_output_for(state: &Path, harness: &str, input: &str) -> Output {
     let mut child = binary()
-        .args(["hook", "claude"])
+        .args(["hook", harness])
         .env("COMPLEXITY_GATE_HOME", state)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
