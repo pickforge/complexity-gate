@@ -6,6 +6,11 @@ flow depth, significant lines, and parameters without external linters.
 
 ## Install
 
+Want your coding agent to handle the setup? Send it the
+[AI installation guide](INSTALL_WITH_AGENT.md). It tells the agent how to choose
+integrations, install hooks and plugins, update agent instructions, and verify
+the result.
+
 Install the binary, then choose the coding harness integrations you want:
 
 ```sh
@@ -55,19 +60,3 @@ configures them automatically. Native adapters are available through
 `complexity-gate hook claude|codex|cursor|grok`; Pi and OMP use their extension
 API, and OpenCode uses its plugin API. Field mappings and limitations are in
 [`docs/hooks.md`](docs/hooks.md).
-
-## Add it to AGENTS.md
-
-Copy this into your project or global `AGENTS.md` so coding agents also run the
-gate during reviews and know how to handle unsupported files:
-
-```md
-Use complexity-gate for every coding and code-review task. If it is missing,
-install it with `npm install --global @pickforge/complexity-gate`, then run
-`complexity-gate-install` and select the harness integrations to enable. Run
-`complexity-gate check --changed` before completion. Fix every
-`FAIL` without raising limits or hiding branches. Report every `UNVERIFIED`
-file instead of estimating its complexity.
-```
-
-The same text is available in [`docs/AGENTS.example.md`](docs/AGENTS.example.md).
