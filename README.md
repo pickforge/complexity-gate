@@ -40,12 +40,16 @@ cargo install --git https://github.com/pickforge/complexity-gate --package compl
 ```sh
 complexity-gate check src
 complexity-gate check --changed
+complexity-gate check --changed --verbose src/auth.ts
 complexity-gate check --format json .
 complexity-gate doctor --coverage
 ```
 
 `check` exits 0 when clean, 1 for violations, and 2 for usage/runtime errors.
 Unsupported extensions are reported as `UNVERIFIED` without failing.
+`--changed` prints a summary capped at 20 paths and never scans outside a Git
+repository with `HEAD`. Use its `DETAILS` command to inspect one failing file.
+Explicit paths remain detailed by default; `--summary` makes them compact.
 
 Run `complexity-gate init` to write `.complexity-gate.json`. Resolution order is
 built-in defaults, user config, nearest repo config, then `--config`; later

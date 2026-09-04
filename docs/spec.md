@@ -226,7 +226,7 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 Binary: `complexity-gate`.
 
 ```
-complexity-gate check [--changed] [--format text|json] [--config <path>] [paths…]
+complexity-gate check [--changed] [--verbose|--summary] [--format text|json] [--config <path>] [paths…]
 complexity-gate hook claude
 complexity-gate hook codex
 complexity-gate hook cursor
@@ -246,11 +246,9 @@ complexity-gate --version
   from any cwd inside the repository; reported paths are relative to the cwd. A function is "touched" when
   its line span intersects the post-image range of any added/modified hunk. Pure
   deletions touch nothing. Outside a Git repository, or with no `HEAD`, `--changed`
-  falls back to all given paths (or the cwd) and prints a `note:` line on stderr.
-  Hook mode (`hook claude|codex|cursor|grok`) does not fall back: outside a Git repository
-  it prints a `note: hook skipped` line, emits no block, and a Stop resets the
-  loop counter, so a session running from a non-repo cwd is never gated on the
-  whole tree.
+  exits 2 with a short error and does not scan. Hook mode
+  (`hook claude|codex|cursor|grok`) remains nonblocking: it prints a
+  `note: hook skipped` line, emits no block, and a Stop resets the loop counter.
   The changed file set comes straight from Git: `git diff HEAD` post-image paths
   (which already include tracked files that a later `.gitignore` rule covers)
   plus untracked files from `git ls-files --others --exclude-standard`; config
@@ -262,7 +260,10 @@ complexity-gate --version
   removed from its environment.
 - `--changed` and explicit `paths` together: intersection (changed functions within
   those paths).
-- Output `text` (default), one line per violation, sorted by file then line:
+- Text output for explicit paths is detailed by default, one line per violation,
+  sorted by file then line. `--verbose` selects the same output explicitly and
+  never prints passing functions. With `--changed`, `--verbose` requires at least
+  one explicit file and rejects directories:
 
 ```
 FAIL src/auth.ts:42 authenticate  complexity 18 > 15
@@ -270,11 +271,28 @@ FAIL src/auth.ts:42 authenticate  depth 5 > 4
 UNVERIFIED src/Foo.kt  no grammar for .kt
 ```
 
+- Text output for `--changed` is summarized by default. `--summary` requests the
+  same output for explicit paths. It reports total failing files, functions,
+  violations, and unverified files; lists failing paths before unverified paths;
+  caps the combined list at 20 paths; reports the omitted count; and ends with a
+  scoped `DETAILS` command. Clean output is empty and never prints `PASS`:
+
+```
+FAIL 2 changed files, 3 functions, 4 violations
+UNVERIFIED 1 changed file
+FAIL src/auth.ts  2 functions, 3 violations
+FAIL src/order.ts  1 function, 1 violation
+UNVERIFIED src/Foo.kt  no grammar for .kt
+DETAILS complexity-gate check --changed --verbose <file>
+```
+
+  `--summary` and `--verbose` conflict with each other and with `--format json`.
+
 - Output `json`:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.1",
   "checked": 12,
   "violations": [
     {"file": "src/auth.ts", "line": 42, "function": "authenticate",
@@ -297,17 +315,17 @@ UNVERIFIED src/Foo.kt  no grammar for .kt
 
 Reads the Claude Code hook JSON from stdin and dispatches on `hook_event_name`:
 
-- `PostToolUse` with `tool_name` `Edit`, `Write`, or `MultiEdit` → `check
-  <tool_input.file_path>`. On violations print JSON
-  `{"decision":"block","reason":"<text report>"}` and exit 0 — this returns the
-  report to the agent as feedback without undoing the edit. No violations → exit 0
-  with no output.
-- `Stop` → `check --changed` in `cwd`. On violations print
-  `{"decision":"block","reason":"<text report>\nRefactor the listed functions
-  (see the complexity-gate skill), then finish."}` and exit 0, which prevents the
+- `PostToolUse` with `tool_name` `Edit`, `Write`, or `MultiEdit` checks
+  `<tool_input.file_path>`. On violations it prints JSON
+  `{"decision":"block","reason":"<summary>"}` and exits 0. The summary follows
+  the same 20-path cap and returns feedback without undoing the edit. No
+  violations produce no output.
+- `Stop` → `check --changed` in `cwd`. On violations print a compact, 20-path-capped
+  report in `{"decision":"block","reason":"<summary>Fix the listed files, then
+  finish."}` and exit 0, which prevents the
   agent from stopping. Loop guard: consecutive blocks per `session_id` are counted
   in the state directory. The hook blocks at most `hook.max_blocks` times
-  (default 3); every later Stop with violations is allowed and prints the report
+  (default 3); every later Stop with violations is allowed and prints the compact report
   prefixed with `UNRESOLVED` to stderr, exit 0. Only a clean run resets the
   counter (an `UNRESOLVED` release does not). State file names derive from a
   sanitized `session_id`, never from a toolchain-dependent hash.

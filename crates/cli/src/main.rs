@@ -1,6 +1,7 @@
 #![deny(clippy::cognitive_complexity, clippy::too_many_lines)]
 
 mod hooks;
+mod report;
 
 use std::{
     env, fs,
@@ -27,6 +28,10 @@ enum Command {
     Check {
         #[arg(long)]
         changed: bool,
+        #[arg(long, conflicts_with = "summary")]
+        verbose: bool,
+        #[arg(long, conflicts_with = "verbose")]
+        summary: bool,
         #[arg(long, value_enum, default_value = "text")]
         format: Format,
         #[arg(long)]
@@ -44,7 +49,7 @@ enum Command {
     },
 }
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum Format {
     Text,
     Json,
@@ -72,10 +77,12 @@ fn run(cli: Cli) -> Result<u8> {
     match cli.command {
         Command::Check {
             changed,
+            verbose,
+            summary,
             format,
             config,
             paths,
-        } => run_check(changed, format, config.as_deref(), &paths),
+        } => run_check(changed, verbose, summary, format, config.as_deref(), &paths),
         Command::Hook { harness } => hooks::run(match harness {
             Harness::Claude => hooks::Harness::Claude,
             Harness::Codex => hooks::Harness::Codex,
@@ -89,15 +96,18 @@ fn run(cli: Cli) -> Result<u8> {
 
 fn run_check(
     changed: bool,
+    verbose: bool,
+    summary: bool,
     format: Format,
     config: Option<&Path>,
     paths: &[PathBuf],
 ) -> Result<u8> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
+    validate_output_options(changed, verbose, summary, format, paths, &cwd)?;
     let changes = changed.then(|| changed_files(&cwd)).transpose()?;
     if changes.as_ref().is_some_and(|item| item.fallback) {
-        eprintln!(
-            "note: --changed requires a Git repository with HEAD; checking all selected paths"
+        anyhow::bail!(
+            "--changed requires a Git repository with HEAD; run from a repository or omit --changed"
         );
     }
     let result = scan(&ScanOptions {
@@ -111,28 +121,36 @@ fn run_check(
             for note in &result.notes {
                 eprintln!("note: {note}");
             }
-            print_text(&result);
+            let output = if summary || (changed && !verbose) {
+                report::summary(&result, changed)
+            } else {
+                report::detailed(&result)
+            };
+            print!("{output}");
         }
         Format::Json => print_json(&result)?,
     }
     Ok(u8::from(!result.violations.is_empty()))
 }
 
-fn print_text(result: &complexity_gate_core::ScanResult) {
-    for violation in &result.violations {
-        println!(
-            "FAIL {}:{} {}  {} {} > {}",
-            violation.file.display(),
-            violation.line,
-            violation.function,
-            violation.metric,
-            violation.value,
-            violation.limit
-        );
+fn validate_output_options(
+    changed: bool,
+    verbose: bool,
+    summary: bool,
+    format: Format,
+    paths: &[PathBuf],
+    cwd: &Path,
+) -> Result<()> {
+    if format == Format::Json && (verbose || summary) {
+        anyhow::bail!("--verbose and --summary cannot be used with --format json");
     }
-    for item in &result.unverified {
-        println!("UNVERIFIED {}  {}", item.file.display(), item.reason);
+    if changed && verbose && paths.is_empty() {
+        anyhow::bail!("--changed --verbose requires at least one explicit file");
     }
+    if changed && verbose && paths.iter().any(|path| cwd.join(path).is_dir()) {
+        anyhow::bail!("--changed --verbose accepts files, not directories");
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]

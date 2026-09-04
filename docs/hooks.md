@@ -25,6 +25,10 @@ Cursor and Grok post-edit hooks are passive, so immediate findings appear in
 their hook output rather than becoming agent instructions. Their completion
 hooks still force a correction pass.
 
+Every automatic finding uses the compact report: totals, at most 20 failing or
+unverified paths, an omitted count, and a scoped command for detailed output.
+Passing functions are never printed.
+
 The stop loop guard is shared across harnesses. Counters are keyed by the
 sanitized, length-capped session or conversation ID under `~/.pickforge/complexity-gate/`, or
 `COMPLEXITY_GATE_HOME` when set. The hook blocks the first `hook.max_blocks`

@@ -9,6 +9,8 @@ use complexity_gate_core::{ScanOptions, changed_files, load_config, scan};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::report;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Harness {
     Claude,
@@ -141,7 +143,7 @@ fn report_post_edit(harness: Harness, input: &HookInput, paths: &[PathBuf]) -> R
     if result.violations.is_empty() {
         return Ok(0);
     }
-    emit_feedback(harness, &text_report(&result.violations), false)
+    emit_feedback(harness, &report::summary(&result, false), false)
 }
 
 fn report_post_changed(harness: Harness, input: &HookInput) -> Result<u8> {
@@ -158,7 +160,7 @@ fn report_post_changed(harness: Harness, input: &HookInput) -> Result<u8> {
     if result.violations.is_empty() {
         return Ok(0);
     }
-    emit_feedback(harness, &text_report(&result.violations), false)
+    emit_feedback(harness, &report::summary(&result, true), false)
 }
 
 fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
@@ -177,24 +179,22 @@ fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
         reset_counter(&input.session_id)?;
         return Ok(0);
     }
-    let report = text_report(&result.violations);
+    let report = report::summary(&result, true);
     let max = load_config(&cwd, None)?.config.hook.max_blocks;
     if increment_counter(&input.session_id)? > max {
-        eprintln!("UNRESOLVED {report}");
+        eprintln!("UNRESOLVED\n{report}");
         return Ok(0);
     }
     emit_feedback(
         harness,
-        &format!(
-            "{report}\nRefactor the listed functions (see the complexity-gate skill), then finish."
-        ),
+        &format!("{report}Fix the listed files, then finish."),
         true,
     )
 }
 
 /// Hooks gate only the diff of the repository around `cwd`. Outside a Git
 /// repository (or with no `HEAD`) there is nothing to diff, so hooks pass
-/// instead of scanning the whole tree the way the CLI fallback does.
+/// without scanning the whole tree.
 fn repo_changes(cwd: &Path) -> Result<Option<complexity_gate_core::ChangedFiles>> {
     let changes = changed_files(cwd)?;
     if changes.fallback {
@@ -232,24 +232,6 @@ fn emit_feedback(harness: Harness, reason: &str, stop: bool) -> Result<u8> {
             Ok(0)
         }
     }
-}
-
-fn text_report(violations: &[complexity_gate_core::Violation]) -> String {
-    violations
-        .iter()
-        .map(|item| {
-            format!(
-                "FAIL {}:{} {}  {} {} > {}",
-                item.file.display(),
-                item.line,
-                item.function,
-                item.metric,
-                item.value,
-                item.limit
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 pub fn state_dir() -> Result<PathBuf> {
