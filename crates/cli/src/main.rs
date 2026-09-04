@@ -54,6 +54,8 @@ enum Format {
 enum Harness {
     Claude,
     Codex,
+    Cursor,
+    Grok,
 }
 
 fn main() -> ExitCode {
@@ -77,6 +79,8 @@ fn run(cli: Cli) -> Result<u8> {
         Command::Hook { harness } => hooks::run(match harness {
             Harness::Claude => hooks::Harness::Claude,
             Harness::Codex => hooks::Harness::Codex,
+            Harness::Cursor => hooks::Harness::Cursor,
+            Harness::Grok => hooks::Harness::Grok,
         }),
         Command::Init => init(),
         Command::Doctor { coverage } => doctor(coverage),
