@@ -148,6 +148,92 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
 }
 
 #[test]
+fn changed_outside_git_fails_without_scanning() {
+    let dir = tempfile::tempdir().unwrap();
+    let child = dir.path().join("child");
+    fs::create_dir(&child).unwrap();
+    fs::write(child.join("bad.js"), complex_function()).unwrap();
+
+    let output = command_output(dir.path(), &["check", "--changed"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("--changed requires a Git repository with HEAD"));
+    assert!(!error.contains("bad.js"));
+}
+
+#[test]
+fn changed_without_head_fails_without_scanning() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("bad.js"), complex_function()).unwrap();
+    git(dir.path(), &["init", "-q"]);
+
+    let output = command_output(dir.path(), &["check", "--changed"]);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--changed requires a Git repository with HEAD")
+    );
+}
+
+#[test]
+fn changed_defaults_to_summary_and_verbose_requires_a_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.js");
+    fs::write(&file, "function bad(x) { return x; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&file, complex_function()).unwrap();
+
+    let summary = command_output(dir.path(), &["check", "--changed"]);
+    let summary_text = String::from_utf8_lossy(&summary.stdout);
+    assert_eq!(summary.status.code(), Some(1));
+    assert!(summary_text.contains("FAIL 1 changed file, 1 function, 1 violation"));
+    assert!(summary_text.contains("FAIL bad.js  1 function, 1 violation"));
+    assert!(!summary_text.contains("bad.js:1 bad"));
+
+    let unscoped = command_output(dir.path(), &["check", "--changed", "--verbose"]);
+    assert_eq!(unscoped.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&unscoped.stderr)
+            .contains("--changed --verbose requires at least one explicit file")
+    );
+
+    let directory = command_output(dir.path(), &["check", "--changed", "--verbose", "."]);
+    assert_eq!(directory.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&directory.stderr)
+            .contains("--changed --verbose accepts files, not directories")
+    );
+
+    let verbose = command_output(dir.path(), &["check", "--changed", "--verbose", "bad.js"]);
+    assert_eq!(verbose.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&verbose.stdout).contains("FAIL bad.js:1 bad"));
+
+    let explicit_summary = command_output(dir.path(), &["check", "--summary", "bad.js"]);
+    assert_eq!(explicit_summary.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&explicit_summary.stdout)
+            .contains("FAIL bad.js  1 function, 1 violation")
+    );
+
+    let incompatible = command_output(
+        dir.path(),
+        &["check", "--summary", "--format", "json", "bad.js"],
+    );
+    assert_eq!(incompatible.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&incompatible.stderr).contains("cannot be used with --format json")
+    );
+}
+
+#[test]
 fn changed_explicit_paths_normalize_parent_components() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("src");
@@ -248,7 +334,7 @@ fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
     );
     assert_eq!(
         String::from_utf8_lossy(&check.stdout),
-        "UNVERIFIED staged.js  not valid UTF-8\n"
+        "UNVERIFIED 1 changed file\nUNVERIFIED staged.js  not valid UTF-8\nDETAILS complexity-gate check --changed --verbose <file>\n"
     );
 
     let input = serde_json::json!({
@@ -347,7 +433,7 @@ fn stop_loop_guard_blocks_three_then_releases_without_reset() {
             assert!(output.stderr.is_empty());
         } else {
             assert!(output.stdout.is_empty());
-            assert!(String::from_utf8_lossy(&output.stderr).starts_with("UNRESOLVED FAIL"));
+            assert!(String::from_utf8_lossy(&output.stderr).starts_with("UNRESOLVED\nFAIL"));
         }
     }
     assert_eq!(
@@ -426,10 +512,12 @@ fn cursor_and_grok_hooks_follow_native_output_contracts() {
     assert!(cursor_stop_output.status.success());
     let cursor_feedback: serde_json::Value =
         serde_json::from_slice(&cursor_stop_output.stdout).unwrap();
-    assert!(cursor_feedback["followup_message"]
-        .as_str()
-        .unwrap()
-        .contains("Refactor the listed functions"));
+    assert!(
+        cursor_feedback["followup_message"]
+            .as_str()
+            .unwrap()
+            .contains("Fix the listed files")
+    );
 
     let grok_stop = serde_json::json!({
         "hookEventName":"stop", "sessionId":"grok-stop",
@@ -438,9 +526,7 @@ fn cursor_and_grok_hooks_follow_native_output_contracts() {
     .to_string();
     let grok_stop_output = hook_output_for(state.path(), "grok", &grok_stop);
     assert_eq!(grok_stop_output.status.code(), Some(2));
-    assert!(
-        String::from_utf8_lossy(&grok_stop_output.stderr).contains("Refactor the listed functions")
-    );
+    assert!(String::from_utf8_lossy(&grok_stop_output.stderr).contains("Fix the listed files"));
 }
 
 fn command_output(cwd: &Path, args: &[&str]) -> Output {

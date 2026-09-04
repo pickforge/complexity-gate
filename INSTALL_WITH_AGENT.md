@@ -70,6 +70,10 @@ complexity-gate doctor
 complexity-gate check --changed
 ```
 
+Run the final command from inside the repository. It intentionally fails instead
+of scanning the current directory when no Git `HEAD` is available. If it reports
+violations, run the printed scoped `--verbose` command for one file at a time.
+
 Confirm the selected harness configuration contains `complexity-gate`, without
 printing unrelated configuration or secrets. For Pi, OMP, and OpenCode, use
 their plugin-list or resolved-config command when available.
