@@ -520,7 +520,8 @@ fn cursor_and_grok_hooks_follow_native_output_contracts() {
     );
 
     let grok_stop = serde_json::json!({
-        "hookEventName":"stop", "sessionId":"grok-stop",
+        "hook_event_name":"Stop", "hookEventName":"stop",
+        "sessionId":"grok-stop", "session_id":"grok-stop",
         "workspaceRoot":dir.path()
     })
     .to_string();

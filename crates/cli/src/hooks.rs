@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use complexity_gate_core::{ScanOptions, changed_files, load_config, scan};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use crate::report;
 
@@ -19,26 +19,62 @@ pub enum Harness {
     Grok,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 struct HookInput {
-    #[serde(alias = "hookEventName")]
     hook_event_name: String,
-    #[serde(default, alias = "sessionId", alias = "conversation_id")]
     session_id: String,
-    #[serde(default)]
     cwd: Option<PathBuf>,
-    #[serde(default, alias = "workspaceRoot")]
     workspace_root: Option<PathBuf>,
-    #[serde(default, alias = "workspaceRoots")]
     workspace_roots: Vec<PathBuf>,
-    #[serde(default, alias = "toolName")]
     tool_name: Option<String>,
-    #[serde(default, alias = "toolInput")]
     tool_input: Value,
-    #[serde(default, alias = "filePath")]
     file_path: Option<PathBuf>,
-    #[serde(default)]
     status: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for HookInput {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut map = Map::<String, Value>::deserialize(deserializer)?;
+        let hook_event_name = take_string(&mut map, &["hook_event_name", "hookEventName"])
+            .ok_or_else(|| serde::de::Error::missing_field("hook_event_name"))?;
+        Ok(Self {
+            hook_event_name,
+            session_id: take_string(&mut map, &["session_id", "sessionId", "conversation_id"])
+                .unwrap_or_default(),
+            cwd: take_path(&mut map, &["cwd"]),
+            workspace_root: take_path(&mut map, &["workspace_root", "workspaceRoot"]),
+            workspace_roots: take_path_list(&mut map, &["workspace_roots", "workspaceRoots"]),
+            tool_name: take_string(&mut map, &["tool_name", "toolName"]),
+            tool_input: take_value(&mut map, &["tool_input", "toolInput"]).unwrap_or(Value::Null),
+            file_path: take_path(&mut map, &["file_path", "filePath"]),
+            status: take_string(&mut map, &["status"]),
+        })
+    }
+}
+
+fn take_value(map: &mut Map<String, Value>, keys: &[&str]) -> Option<Value> {
+    keys.iter().find_map(|key| map.remove(*key))
+}
+
+fn take_string(map: &mut Map<String, Value>, keys: &[&str]) -> Option<String> {
+    take_value(map, keys).and_then(|value| match value {
+        Value::String(text) => Some(text),
+        other => other.as_str().map(str::to_owned),
+    })
+}
+
+fn take_path(map: &mut Map<String, Value>, keys: &[&str]) -> Option<PathBuf> {
+    take_string(map, keys).map(PathBuf::from)
+}
+
+fn take_path_list(map: &mut Map<String, Value>, keys: &[&str]) -> Vec<PathBuf> {
+    match take_value(map, keys) {
+        Some(Value::Array(entries)) => entries
+            .into_iter()
+            .filter_map(|entry| entry.as_str().map(PathBuf::from))
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 enum Event {
@@ -324,6 +360,16 @@ mod tests {
             file_path: None,
             status: None,
         }
+    }
+
+    #[test]
+    fn grok_payload_with_both_event_name_keys_parses() {
+        let input: HookInput = serde_json::from_str(
+            r#"{"hook_event_name":"Stop","hookEventName":"stop","session_id":"s","sessionId":"s","cwd":"/tmp"}"#,
+        )
+        .expect("both event-name keys");
+        assert_eq!(input.hook_event_name, "Stop");
+        assert_eq!(input.session_id, "s");
     }
 
     #[test]

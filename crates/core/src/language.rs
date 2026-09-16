@@ -562,7 +562,8 @@ fn contains_call(node: Node<'_>) -> bool {
         return true;
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor).any(|child| contains_call(child))
+    node.named_children(&mut cursor)
+        .any(|child| contains_call(child))
 }
 
 fn leftmost_callee_identifier(node: Node<'_>) -> Option<Node<'_>> {
