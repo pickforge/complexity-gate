@@ -111,11 +111,23 @@ migrated automatically; existing files are left in place.
 | Hook state | `~/.pickforge/complexity-gate/`, `COMPLEXITY_GATE_HOME` | `~/.pickforge/pickcheck/`, `PICKCHECK_HOME` |
 | Installer overrides | `COMPLEXITY_GATE_BIN`, `COMPLEXITY_GATE_VERSION` | `PICKCHECK_BIN`, `PICKCHECK_VERSION` |
 
-To move an existing install: uninstall the old npm package, install the new one
-and rerun `pickcheck-install` for your harnesses, rename `.complexity-gate.json`
-to `.pickcheck.json` in each repository, move the user config if you have one,
-and replace `complexity-gate hook <harness>` with `pickcheck hook <harness>` in
-any hook you wrote by hand.
+To move an existing install, remove the old integrations before installing the
+new ones; the installer only adds entries and never removes old ones, so a
+leftover `complexity-gate hook <harness>` entry keeps calling a command that
+no longer exists.
+
+1. Delete every `complexity-gate hook <harness>` entry from
+   `~/.claude/settings.json`, `~/.codex/hooks.json`, and `~/.cursor/hooks.json`,
+   including hooks you wrote by hand, and delete `~/.grok/hooks/complexity-gate.json`.
+2. Remove the old plugin and package registrations:
+   `claude plugin uninstall complexity-gate@pickforge`, the
+   `@pickforge/complexity-gate` entry in Pi, OMP, and OpenCode settings, and the
+   `~/.codex/skills/complexity-gate` copy.
+3. Uninstall `@pickforge/complexity-gate`, install `@pickforge/pickcheck`, and
+   run `pickcheck-install` for your harnesses.
+4. Rename `.complexity-gate.json` to `.pickcheck.json` in each repository and
+   move `~/.config/complexity-gate/config.json` to
+   `~/.config/pickcheck/config.json` if you have one.
 
 ## Configuration
 

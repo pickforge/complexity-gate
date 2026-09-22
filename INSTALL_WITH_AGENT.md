@@ -5,8 +5,10 @@ installation and verification instead of only describing the commands.
 
 PickCheck was formerly named complexity-gate. Since 0.3.0 the npm package,
 binary, installer, hook commands, config file, and state directory all use the
-`pickcheck` name. If an older install exists, replace it with the commands
-below instead of keeping both.
+`pickcheck` name. If an older install exists, first follow the
+[rename steps in the README](README.md#renamed-from-complexity-gate) to remove
+its hooks, plugins, and package, then continue below; the installer never
+removes old entries.
 
 ## Choose integrations
 
