@@ -1,18 +1,18 @@
 [package]
-name = "complexity-gate"
+name = "pickcheck"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "complexity-gate"
+name = "pickcheck"
 path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-complexity-gate-core = { path = "../core", version = "=0.2.1" }
+pickcheck-core = { path = "../core", version = "=0.3.0" }
 serde.workspace = true
 serde_json.workspace = true
 

@@ -27,12 +27,12 @@
     <text x="564" y="100" text-anchor="end" font-family="Geist Mono, JetBrains Mono, monospace" font-size="10" letter-spacing="1.8" fill="#6E6E75" fill-opacity="0.7">~/app · git HEAD</text>
     <rect x="40" y="116" width="528" height="370" rx="6" fill="#000000" fill-opacity="0.4" stroke="#F2F2F3" stroke-opacity="0.05"/>
     <g font-family="Geist Mono, JetBrains Mono, monospace" font-size="12.5" xml:space="preserve">
-      <text x="56" y="150" fill="#F2F2F3">$ complexity-gate check --changed</text>
+      <text x="56" y="150" fill="#F2F2F3">$ pickcheck check --changed</text>
       <text x="56" y="180" fill="#F2F2F3" fill-opacity="0.85">FAIL 1 changed file, 1 function, 1 violation</text>
       <text x="56" y="204" fill="#F2F2F3" fill-opacity="0.85">FAIL src/auth.ts  1 function, 1 violation</text>
-      <text x="56" y="228" fill="#6E6E75">DETAILS complexity-gate check --changed --verbose &lt;file&gt;</text>
+      <text x="56" y="228" fill="#6E6E75">DETAILS pickcheck check --changed --verbose &lt;file&gt;</text>
       <text x="56" y="252" fill="#6E6E75">exit 1</text>
-      <text x="56" y="298" fill="#F2F2F3">$ complexity-gate check --changed --verbose src/auth.ts</text>
+      <text x="56" y="298" fill="#F2F2F3">$ pickcheck check --changed --verbose src/auth.ts</text>
       <text x="56" y="328" fill="#F2F2F3" fill-opacity="0.85">FAIL src/auth.ts:42 authenticate  complexity 18 &gt; 15</text>
       <text x="56" y="352" fill="#6E6E75">exit 1</text>
       <rect x="56" y="386" width="8" height="16" fill="#F2F2F3" fill-opacity="0.6"/>
@@ -95,7 +95,7 @@
     <!-- ===== hook loop: two events merge into one decision ===== -->
     <rect x="24" y="526" width="1152" height="170" rx="10" fill="#0F0F11" stroke="#F2F2F3" stroke-opacity="0.08"/>
     <text x="44" y="552" font-family="Geist Mono, JetBrains Mono, monospace" font-size="10" letter-spacing="1.8" fill="#6E6E75">HOOK LOOP</text>
-    <text x="1156" y="552" text-anchor="end" font-family="Geist Mono, JetBrains Mono, monospace" font-size="10" letter-spacing="1.8" fill="#6E6E75" fill-opacity="0.7">complexity-gate hook claude</text>
+    <text x="1156" y="552" text-anchor="end" font-family="Geist Mono, JetBrains Mono, monospace" font-size="10" letter-spacing="1.8" fill="#6E6E75" fill-opacity="0.7">pickcheck hook claude</text>
 
     <g font-family="Geist Mono, JetBrains Mono, monospace" font-size="12">
       <rect x="44" y="566" width="232" height="32" rx="16" fill="#F2F2F3" fill-opacity="0.05" stroke="#F2F2F3" stroke-opacity="0.1"/>

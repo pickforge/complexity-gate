@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use complexity_gate_core::{ScanResult, Violation};
+use pickcheck_core::{ScanResult, Violation};
 
 const SUMMARY_PATH_LIMIT: usize = 20;
 
@@ -106,9 +106,9 @@ fn group_failures(violations: &[Violation]) -> BTreeMap<&std::path::Path, FileFa
 
 fn details_hint(changed: bool) -> &'static str {
     if changed {
-        "DETAILS complexity-gate check --changed --verbose <file>"
+        "DETAILS pickcheck check --changed --verbose <file>"
     } else {
-        "DETAILS complexity-gate check --verbose <file>"
+        "DETAILS pickcheck check --verbose <file>"
     }
 }
 
@@ -146,7 +146,7 @@ fn lines(items: impl IntoIterator<Item = String>) -> String {
 mod tests {
     use std::path::PathBuf;
 
-    use complexity_gate_core::{ScanResult, Unverified, Violation};
+    use pickcheck_core::{ScanResult, Unverified, Violation};
 
     use super::*;
 
@@ -183,7 +183,7 @@ mod tests {
         assert!(output.contains("FAIL src/00.js  1 function, 2 violations\n"));
         assert!(output.contains("... 3 more files\n"));
         assert_eq!(output.matches("FAIL src/").count(), SUMMARY_PATH_LIMIT);
-        assert!(output.ends_with("DETAILS complexity-gate check --changed --verbose <file>\n"));
+        assert!(output.ends_with("DETAILS pickcheck check --changed --verbose <file>\n"));
     }
 
     #[test]

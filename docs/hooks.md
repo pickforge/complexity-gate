@@ -30,8 +30,8 @@ unverified paths, an omitted count, and a scoped command for detailed output.
 Passing functions are never printed.
 
 The stop loop guard is shared across harnesses. Counters are keyed by the
-sanitized, length-capped session or conversation ID under `~/.pickforge/complexity-gate/`, or
-`COMPLEXITY_GATE_HOME` when set. The hook blocks the first `hook.max_blocks`
+sanitized, length-capped session or conversation ID under `~/.pickforge/pickcheck/`, or
+`PICKCHECK_HOME` when set. The hook blocks the first `hook.max_blocks`
 consecutive failing Stop events. Later failing Stop events report `UNRESOLVED`
 on stderr and do not reset the counter; only a clean Stop resets it. A missing
 ID uses the `unkeyed` counter. Working-directory fallbacks use each harness's

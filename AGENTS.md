@@ -4,4 +4,4 @@ Do not lower metric limits, coverage floors or clippy thresholds to get green. C
 
 `--changed` uses Git diff post-images plus untracked files, resolved against the repo root. Do not walk the current directory or let `.gitignore` filter that set. Classify syntax by tree-sitter node kinds and fields, never text prefixes or operator substrings.
 
-Loop-guard state lives in `~/.pickforge/complexity-gate/`; `COMPLEXITY_GATE_HOME` overrides it. A workspace version bump also needs the exact `complexity-gate-core` dependency pin in `crates/cli/Cargo.toml`.
+Loop-guard state lives in `~/.pickforge/pickcheck/`; `PICKCHECK_HOME` overrides it. A workspace version bump also needs the exact `pickcheck-core` dependency pin in `crates/cli/Cargo.toml`.

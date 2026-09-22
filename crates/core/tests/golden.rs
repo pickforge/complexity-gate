@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use complexity_gate_core::{FunctionMetrics, Language, parse_source};
+use pickcheck_core::{FunctionMetrics, Language, parse_source};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

@@ -3,9 +3,10 @@
 You are an AI coding agent. Install PickCheck for the user. Perform the
 installation and verification instead of only describing the commands.
 
-PickCheck was formerly named complexity-gate. The npm package, binary,
-installer, hook commands, config file, and state directory still use the
-`complexity-gate` name. Use the commands below exactly as written.
+PickCheck was formerly named complexity-gate. Since 0.3.0 the npm package,
+binary, installer, hook commands, config file, and state directory all use the
+`pickcheck` name. If an older install exists, replace it with the commands
+below instead of keeping both.
 
 ## Choose integrations
 
@@ -25,14 +26,14 @@ hooks.
 Check that Node.js 22 or newer and npm are available. Then run:
 
 ```sh
-npm install --global @pickforge/complexity-gate
+npm install --global @pickforge/pickcheck
 ```
 
 Do not use `sudo` to work around npm permission errors. Use the user's existing
 Node version manager or explain the permission problem.
 
 If Node.js 22 cannot be used, install the binary from the verified archive on
-[GitHub Releases](https://github.com/pickforge/complexity-gate/releases) or
+[GitHub Releases](https://github.com/pickforge/pickcheck/releases) or
 build it with Cargo. Explain that Pi, OMP, and OpenCode plugin installation
 still requires their package tooling.
 
@@ -42,10 +43,10 @@ Run the installer non-interactively with the user's selection. Replace the
 example list with the chosen harnesses:
 
 ```sh
-complexity-gate-install --harness claude,codex
+pickcheck-install --harness claude,codex
 ```
 
-Use `complexity-gate-install --all` only when the user selected all harnesses.
+Use `pickcheck-install --all` only when the user selected all harnesses.
 The installer merges JSON hooks without replacing unrelated configuration. It
 uses the native Pi, OMP, and OpenCode package commands. Grok reuses compatible
 Claude Code or Cursor hooks when present so the gate does not run twice.
@@ -58,8 +59,8 @@ Preserve the existing file. If they did not choose project or global scope, ask
 before editing it.
 
 ```md
-Use PickCheck (`complexity-gate`) for every coding and code-review task. Run
-`complexity-gate check --changed` before completion. Fix every `FAIL` without
+Use PickCheck (`pickcheck`) for every coding and code-review task. Run
+`pickcheck check --changed` before completion. Fix every `FAIL` without
 raising limits or hiding branches. Report every `UNVERIFIED` file instead of
 estimating its complexity.
 ```
@@ -69,16 +70,16 @@ estimating its complexity.
 Run these commands from a Git repository:
 
 ```sh
-complexity-gate --version
-complexity-gate doctor
-complexity-gate check --changed
+pickcheck --version
+pickcheck doctor
+pickcheck check --changed
 ```
 
 Run the final command from inside the repository. It intentionally fails instead
 of scanning the current directory when no Git `HEAD` is available. If it reports
 violations, run the printed scoped `--verbose` command for one file at a time.
 
-Confirm the selected harness configuration contains `complexity-gate`, without
+Confirm the selected harness configuration contains `pickcheck`, without
 printing unrelated configuration or secrets. For Pi, OMP, and OpenCode, use
 their plugin-list or resolved-config command when available.
 

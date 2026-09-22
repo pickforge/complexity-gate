@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use complexity_gate_core::{ScanOptions, changed_files, load_config, scan};
+use pickcheck_core::{ScanOptions, changed_files, load_config, scan};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
@@ -231,7 +231,7 @@ fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
 /// Hooks gate only the diff of the repository around `cwd`. Outside a Git
 /// repository (or with no `HEAD`) there is nothing to diff, so hooks pass
 /// without scanning the whole tree.
-fn repo_changes(cwd: &Path) -> Result<Option<complexity_gate_core::ChangedFiles>> {
+fn repo_changes(cwd: &Path) -> Result<Option<pickcheck_core::ChangedFiles>> {
     let changes = changed_files(cwd)?;
     if changes.fallback {
         eprintln!(
@@ -271,11 +271,11 @@ fn emit_feedback(harness: Harness, reason: &str, stop: bool) -> Result<u8> {
 }
 
 pub fn state_dir() -> Result<PathBuf> {
-    if let Some(path) = env::var_os("COMPLEXITY_GATE_HOME") {
+    if let Some(path) = env::var_os("PICKCHECK_HOME") {
         return Ok(PathBuf::from(path));
     }
     let home = dirs_home().context("cannot determine home directory")?;
-    Ok(home.join(".pickforge/complexity-gate"))
+    Ok(home.join(".pickforge/pickcheck"))
 }
 
 fn dirs_home() -> Option<PathBuf> {
