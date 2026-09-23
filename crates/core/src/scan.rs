@@ -68,7 +68,7 @@ pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
     if options.changed.is_some_and(config_changed) {
         result
             .notes
-            .push(".complexity-gate.json changed in this diff".to_owned());
+            .push(".pickcheck.json changed in this diff".to_owned());
     }
     for file in files {
         scan_file(&file, &match_base, options, &mut result)?;
@@ -131,7 +131,7 @@ fn scan_anchor(root: &Path) -> &Path {
 fn nearest_project_root(start: &Path) -> Option<PathBuf> {
     start
         .ancestors()
-        .find(|directory| directory.join(".complexity-gate.json").is_file())
+        .find(|directory| directory.join(".pickcheck.json").is_file())
         .map(Path::to_path_buf)
 }
 
@@ -139,7 +139,7 @@ fn config_changed(changed: &ChangedFiles) -> bool {
     !changed.fallback
         && changed.spans.keys().chain(&changed.untracked).any(|path| {
             path.file_name()
-                .is_some_and(|name| name == ".complexity-gate.json")
+                .is_some_and(|name| name == ".pickcheck.json")
         })
 }
 

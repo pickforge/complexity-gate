@@ -146,39 +146,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
-name = "complexity-gate"
-version = "0.2.1"
-dependencies = [
- "anyhow",
- "clap",
- "complexity-gate-core",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "complexity-gate-core"
-version = "0.2.1"
-dependencies = [
- "anyhow",
- "dirs",
- "globset",
- "ignore",
- "serde",
- "serde_json",
- "tempfile",
- "tree-sitter",
- "tree-sitter-dart",
- "tree-sitter-go",
- "tree-sitter-javascript",
- "tree-sitter-python",
- "tree-sitter-rust",
- "tree-sitter-svelte-ng",
- "tree-sitter-typescript",
-]
-
-[[package]]
 name = "crossbeam-deque"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -387,6 +354,39 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "pickcheck"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "pickcheck-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "pickcheck-core"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "globset",
+ "ignore",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tree-sitter",
+ "tree-sitter-dart",
+ "tree-sitter-go",
+ "tree-sitter-javascript",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-svelte-ng",
+ "tree-sitter-typescript",
+]
 
 [[package]]
 name = "proc-macro2"

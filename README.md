@@ -14,8 +14,9 @@ code they change.
 
 Local-first. Open source. Built for people who ship.
 
-PickCheck was formerly named complexity-gate. Commands, packages, and config
-paths keep that name; see [Compatibility names](#compatibility-names).
+PickCheck was formerly named complexity-gate. Since 0.3.0 every command,
+package, config path, and environment variable uses the new name; see
+[Renamed from complexity-gate](#renamed-from-complexity-gate).
 
 ## Install
 
@@ -27,13 +28,13 @@ the result.
 Install the binary, then choose the coding harness integrations you want:
 
 ```sh
-npm install --global @pickforge/complexity-gate
-complexity-gate-install
+npm install --global @pickforge/pickcheck
+pickcheck-install
 ```
 
 The installer supports Claude Code, Codex, Pi, OMP, Grok, Cursor, and OpenCode.
 The second command prompts for a comma-separated harness list, `all`, or `none`.
-Choose non-interactively with `complexity-gate-install --harness claude,codex`
+Choose non-interactively with `pickcheck-install --harness claude,codex`
 or `--all`. It preserves existing configuration and can print changes first
 with `--print`.
 
@@ -41,21 +42,21 @@ The npm package requires Node.js 22 or newer. It downloads the matching binary,
 verifies its SHA-256 checksum, and installs the selected hooks or plugins.
 
 To install only the binary, download the archive for your platform from
-[GitHub Releases](https://github.com/pickforge/complexity-gate/releases), verify
-its checksum, and place `complexity-gate` on `PATH`. To build from source:
+[GitHub Releases](https://github.com/pickforge/pickcheck/releases), verify
+its checksum, and place `pickcheck` on `PATH`. To build from source:
 
 ```sh
-cargo install --git https://github.com/pickforge/complexity-gate --package complexity-gate --locked
+cargo install --git https://github.com/pickforge/pickcheck --package pickcheck --locked
 ```
 
 ## Quickstart
 
 ```sh
-complexity-gate check src                             # check a directory
-complexity-gate check --changed                       # only functions touched by the Git diff
-complexity-gate check --changed --verbose src/auth.ts # details for one failing file
-complexity-gate check --format json .                 # machine-readable report
-complexity-gate doctor --coverage                     # config chain, grammars, unclassified syntax
+pickcheck check src                             # check a directory
+pickcheck check --changed                       # only functions touched by the Git diff
+pickcheck check --changed --verbose src/auth.ts # details for one failing file
+pickcheck check --format json .                 # machine-readable report
+pickcheck doctor --coverage                     # config chain, grammars, unclassified syntax
 ```
 
 `check` exits 0 when clean, 1 for violations, and 2 for usage/runtime errors.
@@ -69,7 +70,7 @@ Explicit paths remain detailed by default; `--summary` makes them compact.
 Hooks are the recommended mode. They check edited files during the turn and
 block completion while changed functions exceed the limits. The npm installer
 configures them automatically. Native adapters are available through
-`complexity-gate hook claude|codex|cursor|grok`; Pi and OMP use their extension
+`pickcheck hook claude|codex|cursor|grok`; Pi and OMP use their extension
 API, and OpenCode uses its plugin API. A Stop is blocked at most
 `hook.max_blocks` times in a row (default 3). Field mappings and limitations are
 in [`docs/hooks.md`](docs/hooks.md).
@@ -94,24 +95,43 @@ Each function is measured on its own. A violation is `value > limit`.
 Test files are exempt from `lines` only. Counting rules per language are in
 [`docs/spec.md`](docs/spec.md).
 
-## Compatibility names
+## Renamed from complexity-gate
 
-Only the product name changed. Everything that runs keeps the complexity-gate
-name, so existing installs, hooks, and configs keep working.
+Releases before 0.3.0 shipped under the complexity-gate name. Nothing is
+migrated automatically; existing files are left in place.
 
-| Surface | Name |
-|---|---|
-| Repository | [`pickforge/complexity-gate`](https://github.com/pickforge/complexity-gate) |
-| npm package | `@pickforge/complexity-gate` |
-| Binary and installer | `complexity-gate`, `complexity-gate-install` |
-| Cargo packages | `complexity-gate`, `complexity-gate-core` |
-| Repo config | `.complexity-gate.json` |
-| User config | `~/.config/complexity-gate/config.json` |
-| Hook state | `~/.pickforge/complexity-gate/`, `COMPLEXITY_GATE_HOME` |
+| Surface | Old name | New name |
+|---|---|---|
+| Repository | `pickforge/complexity-gate` | [`pickforge/pickcheck`](https://github.com/pickforge/pickcheck) |
+| npm package | `@pickforge/complexity-gate` | `@pickforge/pickcheck` |
+| Binary and installer | `complexity-gate`, `complexity-gate-install` | `pickcheck`, `pickcheck-install` |
+| Cargo packages | `complexity-gate`, `complexity-gate-core` | `pickcheck`, `pickcheck-core` |
+| Repo config | `.complexity-gate.json` | `.pickcheck.json` |
+| User config | `~/.config/complexity-gate/config.json` | `~/.config/pickcheck/config.json` |
+| Hook state | `~/.pickforge/complexity-gate/`, `COMPLEXITY_GATE_HOME` | `~/.pickforge/pickcheck/`, `PICKCHECK_HOME` |
+| Installer overrides | `COMPLEXITY_GATE_BIN`, `COMPLEXITY_GATE_VERSION` | `PICKCHECK_BIN`, `PICKCHECK_VERSION` |
+
+To move an existing install, remove the old integrations before installing the
+new ones; the installer only adds entries and never removes old ones, so a
+leftover `complexity-gate hook <harness>` entry keeps calling a command that
+no longer exists.
+
+1. Delete every `complexity-gate hook <harness>` entry from
+   `~/.claude/settings.json`, `~/.codex/hooks.json`, and `~/.cursor/hooks.json`,
+   including hooks you wrote by hand, and delete `~/.grok/hooks/complexity-gate.json`.
+2. Remove the old plugin and package registrations:
+   `claude plugin uninstall complexity-gate@pickforge`, the
+   `@pickforge/complexity-gate` entry in Pi, OMP, and OpenCode settings, and the
+   `~/.codex/skills/complexity-gate` copy.
+3. Uninstall `@pickforge/complexity-gate`, install `@pickforge/pickcheck`, and
+   run `pickcheck-install` for your harnesses.
+4. Rename `.complexity-gate.json` to `.pickcheck.json` in each repository and
+   move `~/.config/complexity-gate/config.json` to
+   `~/.config/pickcheck/config.json` if you have one.
 
 ## Configuration
 
-Run `complexity-gate init` to write `.complexity-gate.json`. Resolution order is
+Run `pickcheck init` to write `.pickcheck.json`. Resolution order is
 built-in defaults, user config, nearest repo config, then `--config`; later
 values win. Defaults and language overrides are documented in
 [`docs/spec.md`](docs/spec.md).
@@ -121,7 +141,7 @@ values win. Defaults and language overrides are documented in
 - Complexity checks run locally and do not need an external analysis service.
 - The npm installer downloads the release binary from GitHub and verifies its checksum.
 - Nothing is written into the checked repository, except by `init`.
-- Hook loop counters live in `~/.pickforge/complexity-gate/`.
+- Hook loop counters live in `~/.pickforge/pickcheck/`.
 - Git runs with external diff, textconv, fsmonitor, and hooks disabled.
 
 ## Development

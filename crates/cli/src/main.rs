@@ -11,13 +11,13 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use complexity_gate_core::{
+use pickcheck_core::{
     ScanOptions, changed_files, coverage_unknowns, grammar_inventory, load_config, scan,
 };
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "complexity-gate", version)]
+#[command(name = "pickcheck", version)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -157,12 +157,12 @@ fn validate_output_options(
 struct JsonReport<'a> {
     version: &'static str,
     checked: usize,
-    violations: &'a [complexity_gate_core::Violation],
-    unverified: &'a [complexity_gate_core::Unverified],
+    violations: &'a [pickcheck_core::Violation],
+    unverified: &'a [pickcheck_core::Unverified],
     notes: &'a [String],
 }
 
-fn print_json(result: &complexity_gate_core::ScanResult) -> Result<()> {
+fn print_json(result: &pickcheck_core::ScanResult) -> Result<()> {
     let report = JsonReport {
         version: env!("CARGO_PKG_VERSION"),
         checked: result.checked,
@@ -175,7 +175,7 @@ fn print_json(result: &complexity_gate_core::ScanResult) -> Result<()> {
 }
 
 fn init() -> Result<u8> {
-    let path = env::current_dir()?.join(".complexity-gate.json");
+    let path = env::current_dir()?.join(".pickcheck.json");
     if path.exists() {
         anyhow::bail!("{} already exists", path.display());
     }
@@ -192,7 +192,7 @@ fn init() -> Result<u8> {
 fn doctor(coverage: bool) -> Result<u8> {
     let cwd = env::current_dir()?;
     let resolved = load_config(&cwd, None)?;
-    println!("complexity-gate {}", env!("CARGO_PKG_VERSION"));
+    println!("pickcheck {}", env!("CARGO_PKG_VERSION"));
     println!("config chain:");
     for path in resolved.chain {
         println!("  {}", path.display());

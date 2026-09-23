@@ -99,9 +99,9 @@ pub fn load_config(start: &Path, explicit: Option<&Path>) -> Result<ConfigResolu
 
 fn user_config_path() -> Option<PathBuf> {
     if let Some(root) = std::env::var_os("XDG_CONFIG_HOME") {
-        return Some(PathBuf::from(root).join("complexity-gate/config.json"));
+        return Some(PathBuf::from(root).join("pickcheck/config.json"));
     }
-    dirs::config_dir().map(|root| root.join("complexity-gate/config.json"))
+    dirs::config_dir().map(|root| root.join("pickcheck/config.json"))
 }
 
 fn nearest_repo_config(start: &Path) -> Option<PathBuf> {
@@ -112,7 +112,7 @@ fn nearest_repo_config(start: &Path) -> Option<PathBuf> {
     };
     start
         .ancestors()
-        .map(|dir| dir.join(".complexity-gate.json"))
+        .map(|dir| dir.join(".pickcheck.json"))
         .find(|path| path.is_file())
 }
 

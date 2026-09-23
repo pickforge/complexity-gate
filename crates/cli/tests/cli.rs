@@ -6,7 +6,7 @@ use std::{
 };
 
 fn binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_complexity-gate"))
+    Command::new(env!("CARGO_BIN_EXE_pickcheck"))
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn changed_results_are_repo_root_keyed_from_nested_cwd() {
     let nested = dir.path().join("src/sub");
     fs::create_dir_all(&nested).unwrap();
     fs::write(
-        dir.path().join(".complexity-gate.json"),
+        dir.path().join(".pickcheck.json"),
         r#"{"limits":{"depth":0}}"#,
     )
     .unwrap();
@@ -261,7 +261,7 @@ fn changed_explicit_paths_normalize_parent_components() {
 #[test]
 fn changed_config_is_noted_in_text_and_json_reports() {
     let dir = tempfile::tempdir().unwrap();
-    let config = dir.path().join(".complexity-gate.json");
+    let config = dir.path().join(".pickcheck.json");
     fs::write(&config, r#"{"limits":{"depth":4}}"#).unwrap();
     git(dir.path(), &["init", "-q"]);
     git(dir.path(), &["config", "user.email", "test@example.com"]);
@@ -273,13 +273,13 @@ fn changed_config_is_noted_in_text_and_json_reports() {
     let text = command_output(dir.path(), &["check", "--changed"]);
     assert!(
         String::from_utf8_lossy(&text.stderr)
-            .contains("note: .complexity-gate.json changed in this diff")
+            .contains("note: .pickcheck.json changed in this diff")
     );
     let json = command_output(dir.path(), &["check", "--changed", "--format", "json"]);
     let report: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(
         report["notes"],
-        serde_json::json!([".complexity-gate.json changed in this diff"])
+        serde_json::json!([".pickcheck.json changed in this diff"])
     );
 }
 
@@ -334,7 +334,7 @@ fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
     );
     assert_eq!(
         String::from_utf8_lossy(&check.stdout),
-        "UNVERIFIED 1 changed file\nUNVERIFIED staged.js  not valid UTF-8\nDETAILS complexity-gate check --changed --verbose <file>\n"
+        "UNVERIFIED 1 changed file\nUNVERIFIED staged.js  not valid UTF-8\nDETAILS pickcheck check --changed --verbose <file>\n"
     );
 
     let input = serde_json::json!({
@@ -368,7 +368,7 @@ fn test_patterns_and_ignores_use_repository_relative_paths() {
     let tests = dir.path().join("pkg/test");
     fs::create_dir_all(&tests).unwrap();
     fs::write(
-        dir.path().join(".complexity-gate.json"),
+        dir.path().join(".pickcheck.json"),
         r#"{"ignore":["**/ignored.js"]}"#,
     )
     .unwrap();
@@ -410,7 +410,7 @@ fn stop_loop_guard_blocks_three_then_releases_without_reset() {
     let file = dir.path().join("bad.js");
     fs::write(&file, "function bad(x) { return x; }\n").unwrap();
     fs::write(
-        dir.path().join(".complexity-gate.json"),
+        dir.path().join(".pickcheck.json"),
         r#"{"limits":{"depth":0},"hook":{"max_blocks":3}}"#,
     )
     .unwrap();
@@ -520,7 +520,8 @@ fn cursor_and_grok_hooks_follow_native_output_contracts() {
     );
 
     let grok_stop = serde_json::json!({
-        "hookEventName":"stop", "sessionId":"grok-stop",
+        "hook_event_name":"Stop", "hookEventName":"stop",
+        "sessionId":"grok-stop", "session_id":"grok-stop",
         "workspaceRoot":dir.path()
     })
     .to_string();
@@ -540,7 +541,7 @@ fn hook_output(state: &Path, input: &str) -> Output {
 fn hook_output_for(state: &Path, harness: &str, input: &str) -> Output {
     let mut child = binary()
         .args(["hook", harness])
-        .env("COMPLEXITY_GATE_HOME", state)
+        .env("PICKCHECK_HOME", state)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

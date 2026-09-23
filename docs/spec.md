@@ -1,9 +1,8 @@
-# PickCheck (complexity-gate) — specification v1
+# PickCheck — specification v1
 
-PickCheck is the product name; it was formerly complexity-gate. The binary,
-packages, hook commands, config files, and state paths keep the
-`complexity-gate` name, and this contract uses that name for everything that
-runs.
+PickCheck was formerly named complexity-gate. Since 0.3.0 the binary, packages,
+hook commands, config files, and state paths use the `pickcheck` name; old
+files are neither read nor migrated.
 
 One static binary that measures function complexity with tree-sitter and blocks
 coding agents from finishing while the functions they
@@ -11,7 +10,7 @@ changed exceed the limits. No external linters. Manual counting by a model is
 never an accepted measurement.
 
 This document is the contract. Implementation, tests, and the harness package in
-`pickforge-platform/packages/complexity-gate` follow it; deviations are reported
+`pickforge-platform/packages/pickcheck` follow it; deviations are reported
 in the PR, not decided silently.
 
 ## Non-goals
@@ -23,7 +22,7 @@ in the PR, not decided silently.
   agent-side gate.
 - Cognitive complexity (v2 candidate).
 
-complexity-gate measures how hard code is to *read*. It does not enforce policy.
+pickcheck measures how hard code is to *read*. It does not enforce policy.
 Rules of the form "this API is banned", "errors must be typed", "no `any`", or
 "no `unwrap()`" belong to clippy, ESLint, oxlint, and `dart analyze`, which
 already own them, resolve types, and see the whole program. Such rules need
@@ -228,17 +227,17 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 
 ## CLI
 
-Binary: `complexity-gate`.
+Binary: `pickcheck`.
 
 ```
-complexity-gate check [--changed] [--verbose|--summary] [--format text|json] [--config <path>] [paths…]
-complexity-gate hook claude
-complexity-gate hook codex
-complexity-gate hook cursor
-complexity-gate hook grok
-complexity-gate init
-complexity-gate doctor [--coverage]
-complexity-gate --version
+pickcheck check [--changed] [--verbose|--summary] [--format text|json] [--config <path>] [paths…]
+pickcheck hook claude
+pickcheck hook codex
+pickcheck hook cursor
+pickcheck hook grok
+pickcheck init
+pickcheck doctor [--coverage]
+pickcheck --version
 ```
 
 ### `check`
@@ -288,7 +287,7 @@ UNVERIFIED 1 changed file
 FAIL src/auth.ts  2 functions, 3 violations
 FAIL src/order.ts  1 function, 1 violation
 UNVERIFIED src/Foo.kt  no grammar for .kt
-DETAILS complexity-gate check --changed --verbose <file>
+DETAILS pickcheck check --changed --verbose <file>
 ```
 
   `--summary` and `--verbose` conflict with each other and with `--format json`.
@@ -369,7 +368,7 @@ blocks with exit 2 and the report on stderr. The working directory comes from
 
 ### `init`
 
-Writes `.complexity-gate.json` in the current directory containing the effective
+Writes `.pickcheck.json` in the current directory containing the effective
 defaults, for repo-level overrides. Refuses to overwrite an existing file (exit 2).
 
 ### `doctor`
@@ -385,8 +384,8 @@ per grammar, node kinds whose name contains `if`, `for`, `while`, `loop`, `match
 Resolution, later wins, shallow merge per top-level key:
 
 1. built-in defaults (`config.default.json`, embedded)
-2. user: `$XDG_CONFIG_HOME/complexity-gate/config.json` (default `~/.config/complexity-gate/config.json`)
-3. repo: nearest `.complexity-gate.json` walking up from the checked file's
+2. user: `$XDG_CONFIG_HOME/pickcheck/config.json` (default `~/.config/pickcheck/config.json`)
+3. repo: nearest `.pickcheck.json` walking up from the checked file's
    directory — always per file, also under `--changed`, so nested packages can
    carry their own limits
 4. `--config <path>` replaces step 3
@@ -412,8 +411,8 @@ Resolution, later wins, shallow merge per top-level key:
 root (or to the common scan root outside Git), never to the process cwd.
 `tests.exempt` accepts only `lines`; `hook.max_blocks` is clamped to at least 1.
 A repo config is trusted like any repo file. Under `--changed`, when a
-`.complexity-gate.json` is itself among the changed files the report starts with
-`note: .complexity-gate.json changed in this diff` so a reviewer sees it.
+`.pickcheck.json` is itself among the changed files the report starts with
+`note: .pickcheck.json changed in this diff` so a reviewer sees it.
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
@@ -421,8 +420,8 @@ with the key named.
 
 ## State
 
-Loop-guard counters live in `~/.pickforge/complexity-gate/` (override with
-`COMPLEXITY_GATE_HOME`), per the Pickforge local-storage policy. Nothing is ever
+Loop-guard counters live in `~/.pickforge/pickcheck/` (override with
+`PICKCHECK_HOME`), per the Pickforge local-storage policy. Nothing is ever
 written into the checked repository except by `init`.
 
 ## Golden fixtures
@@ -457,14 +456,14 @@ Per the Pickforge gate baseline: `cargo test --workspace --locked --all-targets`
 osv-scanner jobs; `Swatinem/rust-cache@v2` in every workflow including release;
 `cargo-dist` release workflow producing linux-x86_64, linux-aarch64,
 macos-aarch64, macos-x86_64, windows-x86_64 archives with checksums. The binary
-gates itself: CI runs `complexity-gate check crates` and fails on violations.
+gates itself: CI runs `pickcheck check crates` and fails on violations.
 
 ## Layout
 
 ```
 Cargo.toml                 # workspace
-crates/core/               # complexity-gate-core: parsing, metrics, config, diff spans
-crates/cli/                # complexity-gate: clap CLI, hooks, doctor
+crates/core/               # pickcheck-core: parsing, metrics, config, diff spans
+crates/cli/                # pickcheck: clap CLI, hooks, doctor
 config.default.json
 docs/spec.md  docs/hooks.md
 docs/assets/branding/      # PickCheck marks, README art, social card
