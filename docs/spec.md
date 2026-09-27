@@ -321,14 +321,15 @@ Reads the Claude Code hook JSON from stdin and dispatches on `hook_event_name`:
 
 - `PostToolUse` with `tool_name` `Edit`, `Write`, or `MultiEdit` checks
   `<tool_input.file_path>`. On violations it prints JSON
-  `{"decision":"block","reason":"<summary>"}` and exits 0. The summary follows
-  the same 20-path cap and returns feedback without undoing the edit. No
-  violations produce no output.
-- `Stop` → `check --changed` in `cwd`. On violations print a compact, 20-path-capped
-  report in `{"decision":"block","reason":"<summary>Fix the listed files, then
-  finish."}` and exit 0, which prevents the
-  agent from stopping. Loop guard: consecutive blocks per `session_id` are counted
-  in the state directory. The hook blocks at most `hook.max_blocks` times
+  `{"decision":"block","reason":"<summary>"}` and exits 0. `<summary>` is the
+  `--summary` text report, including its `UNVERIFIED` lines, under the same
+  20-path cap; it returns feedback without undoing the edit. No violations
+  produce no output, even when files are unverified.
+- `Stop` → `check --changed` in `cwd`. On violations print the same summary,
+  `UNVERIFIED` lines included, in
+  `{"decision":"block","reason":"<summary>Fix the listed files, then finish."}`
+  and exit 0, which prevents the agent from stopping. Loop guard: consecutive
+  blocks per `session_id` are counted in the state directory. The hook blocks at most `hook.max_blocks` times
   (default 3); every later Stop with violations is allowed and prints the compact report
   prefixed with `UNRESOLVED` to stderr, exit 0. Only a clean run resets the
   counter (an `UNRESOLVED` release does not). State file names derive from a
