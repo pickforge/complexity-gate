@@ -351,6 +351,37 @@ fn changed_non_utf8_diff_does_not_abort_check_or_stop_hook() {
 }
 
 #[test]
+fn stop_hook_reason_lists_unverified_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.js");
+    fs::write(&file, "function bad(x) { return x; }\n").unwrap();
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["config", "user.email", "test@example.com"]);
+    git(dir.path(), &["config", "user.name", "Test"]);
+    git(dir.path(), &["add", "bad.js"]);
+    git(dir.path(), &["commit", "-qm", "initial"]);
+    fs::write(&file, complex_function()).unwrap();
+    fs::write(dir.path().join("Foo.kt"), "fun changed() = 2\n").unwrap();
+
+    let input = serde_json::json!({
+        "hook_event_name":"Stop", "session_id":"unverified", "cwd":dir.path()
+    })
+    .to_string();
+    let stop = hook_output(state.path(), &input);
+    assert!(stop.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&stop.stdout).unwrap();
+    assert_eq!(value["decision"], "block");
+    let reason = value["reason"].as_str().unwrap();
+    assert!(reason.contains("UNVERIFIED 1 changed file\n"), "{reason}");
+    assert!(
+        reason.contains("UNVERIFIED Foo.kt  no grammar for .kt\n"),
+        "{reason}"
+    );
+    assert!(reason.ends_with("Fix the listed files, then finish."));
+}
+
+#[test]
 fn directory_noise_is_silent_and_invalid_utf8_is_unverified() {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("README.md"), "docs\n").unwrap();
