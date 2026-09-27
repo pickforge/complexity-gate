@@ -20,7 +20,6 @@ in the PR, not decided silently.
   differences are expected and documented per language.
 - Replacing repo-level CI gates (ESLint/clippy). Those stay; this is the
   agent-side gate.
-- Cognitive complexity (v2 candidate).
 
 pickcheck measures how hard code is to *read*. It does not enforce policy.
 Rules of the form "this API is banned", "errors must be typed", "no `any`", or
@@ -34,7 +33,8 @@ underlying problem is real.
 
 | Metric | Definition | Default limit |
 |---|---|---|
-| `complexity` | cyclomatic: `1 + decision points` in the function body, excluding nested functions | 15 |
+| `complexity` | cyclomatic: `1 + decision points` in the function body, excluding nested functions | 15, a backstop once `cognitive` ships (see Cognitive complexity) |
+| `cognitive` | cognitive complexity: flow breaks weighted by nesting (see below) | 15 |
 | `depth` | max nesting of control-flow constructs (see below), nested functions reset to 0 | 4 |
 | `lines` | lines from the function's first to last line inclusive, minus blank lines and comment-only lines (every non-whitespace byte inside comment nodes); nested functions included | 100 |
 | `params` | declared parameters; a destructuring pattern counts as 1; receiver/`self`/`this` excluded | 6 |
@@ -162,6 +162,219 @@ fail 48 (18.6%). Both the uppercase rule and the slot list are part of
 this contract — changing either changes every score, so they change only with a
 fixture update.
 
+### Cognitive complexity
+
+`cognitive` scores how hard a function's control flow is to follow. It follows
+SonarSource's Cognitive Complexity (G. Ann Campbell, white paper version 1.7)
+with the deviations listed at the end of this section. Where `complexity`
+counts paths, `cognitive` counts breaks in the reading flow and charges more
+for each one the deeper it sits. A `switch` or `match` costs 1 however many
+arms it has, so a flat 30-arm dispatch scores 1. Fifty-four sequential guard
+clauses still score 54, because each guard is its own break; that function is
+a table or a loop waiting to happen, and failing it is intended.
+
+The metric has its own traversal beside the one behind `complexity`; neither
+reuses the other's classification. The walk starts at the function body with a
+nesting level of 0 and adds increments of two sizes:
+
+| Construct | Adds | Nesting inside it |
+|---|---|---|
+| structural: `if`, every loop, `switch` / `match` / `select`, each catch handler, conditional expression, Dart collection `if` / `for` | 1 + current nesting | raised by 1 for its body parts |
+| structural, flat: Python comprehension `for` / `if` clause | 1 + current nesting | unchanged |
+| `else if` / `elif` | 1 | its consequence sits at the chain's level + 1 |
+| `else` | 1 | its body sits at the chain's level + 1 |
+| labeled `break` / `continue`, Go `goto` | 1 | unchanged |
+| boolean sequence | 1 | unchanged |
+
+Nothing else increments or raises nesting. In particular `try`, `finally`,
+`default` and `_` arms, case and arm guards themselves, unlabeled `break` and
+`continue`, `return`, `throw`, Go `fallthrough` and `defer`, Python `with`,
+`?.`, Rust `?`, and blocks (`async`, `unsafe`, bare braces) add 0 and leave the
+nesting level alone. Boolean operators inside a guard still count as sequences.
+
+Header rule. The parts of a structural construct that run before control
+enters it stay at the construct's own nesting level: the condition of an `if`
+or `while`, a loop's initializer, condition, update, pattern, and iterable, a
+`switch` or `match` subject, and a conditional expression's condition. The
+rest (bodies, cases, arms with their guards, both branches of a conditional
+expression) sits one level deeper. A `try` body and a `finally` body stay at
+the level of the `try`; only handler bodies are raised, and each handler is
+itself a structural increment at the level of the `try`.
+
+`else if` chains. An `if` is an `else if` when it is the alternative of
+another `if`, directly or through the grammar's `else_clause` wrapper. It adds
+a flat 1, takes the nesting level of the first `if` in the chain, and its
+consequence sits one level deeper than that. Any other statement after `else` is a
+plain `else`: flat 1, with its statement at the chain's level + 1. An unbraced
+`else for (...)` is therefore `else` (+1) followed by a loop scored as
+structural at the chain's level + 1, never an `else if`.
+
+Boolean sequences. The operators are the ones `bool_ops` counts: `&&`, `||`,
+`??`, Python `and` / `or`, and the assignment forms `&&=`, `||=`, `??=`. A
+binary short-circuit operator node adds 1 unless its nearest ancestor, looking
+through `parenthesized_expression` nodes only, is a binary short-circuit
+operator node with the same operator. A run of like operators therefore costs 1
+and every change of operator costs 1 more: `a && b && c` scores 1,
+`a && b || c` scores 2, `a && (b && c)` scores 1, and `a && !(b && c)` scores 2
+because the negation ends the run. An assignment form adds 1 and never
+continues a run. The operator comes from the grammar's operator token or node
+kind, so an operator inside a string literal adds nothing.
+
+Nested functions. A nested function, closure, or lambda is scored on its own
+from nesting 0, and nothing inside it counts toward the enclosing function.
+
+Worked example:
+
+```js
+function visit(items) {                   // cognitive
+  for (const x of items) {                // +1  loop, nesting 0
+    if (x.a && x.b) {                     // +2  if, nesting 1; +1 sequence
+      continue;                           //  0  unlabeled
+    } else if (x.c) {                     // +1  else if
+      try { save(x); } catch (e) {        // +3  handler, nesting 2
+        log(e ? e.message : x);           // +4  conditional, nesting 3
+      }
+    }
+  }
+}                                         // total 12
+```
+
+#### Rule tables
+
+Node kinds are those of the grammar versions pinned in `Cargo.toml`. A header
+field not named here is the set of children that precede the construct's first
+body part.
+
+JavaScript, TypeScript, TSX, and Svelte `<script>` blocks:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_statement`, `for_statement`, `for_in_statement`, `while_statement`, `do_statement`, `switch_statement`, `catch_clause`, `ternary_expression` |
+| header | `condition`, `initializer`, `increment`, `left`, `right` of loops; `value` of `switch_statement`; `condition` of `ternary_expression` |
+| else if / else | `if_statement` inside the `else_clause` of an `if_statement` / any other `else_clause` |
+| labeled jump | `break_statement`, `continue_statement` with a `label` field |
+| sequence | `binary_expression` with operator `&&`, `\|\|`, `??`; `augmented_assignment_expression` with `&&=`, `\|\|=`, `??=` |
+
+Dart:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_statement`, `if_element`, `for_statement`, `for_element`, `while_statement`, `do_statement`, `switch_statement`, `switch_expression`, `conditional_expression`; each catch handler: every `block` child of `try_statement` other than its `body` field, which covers `on T {}`, `catch (e) {}`, and `on T catch (e) {}` |
+| header | children before `consequence` of `if_statement`; `condition` of `if_element`; children before `body` of `for_statement` and `for_element`; `condition` of `while_statement` and `do_statement`; `condition` of switches; first named child of `conditional_expression` |
+| else if / else | `if_statement` in the `alternative` field of an `if_statement`, or `if_element` in the `alternative` field of an `if_element` / any other `alternative` of either |
+| labeled jump | `break_statement`, `continue_statement` with an `identifier` child |
+| sequence | `logical_and_expression`, `logical_or_expression`, `if_null_expression` (the node kind is the operator); `assignment_expression` with `??=` |
+| guard, adds 0 | the expression after the anonymous `when` token in `switch_statement_case` and `switch_expression_case`; the grammar has no guard node |
+
+Rust:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_expression` (including `if let`), `for_expression`, `while_expression` (including `while let`), `loop_expression`, `match_expression`, `let_declaration` with an `alternative` field (`let ... else`, whose `alternative` block is its body and adds no separate `else`) |
+| header | `condition` of `if_expression` and `while_expression`; `pattern` and `value` of `for_expression` and `let_declaration`; `value` of `match_expression` |
+| else if / else | `if_expression` inside the `else_clause` of an `if_expression` / any other `else_clause` |
+| labeled jump | `break_expression`, `continue_expression` with a `label` child |
+| sequence | `binary_expression` with operator `&&`, `\|\|`; a `let_chain` (`if let Some(a) = x && let Some(b) = y`), whose `&&` tokens are anonymous children, adds 1 for its whole run of `&&`, and a `binary_expression` operand inside it follows the normal rule, so `if let Some(a) = x && (b \|\| c)` scores 2 for sequences |
+| guard, adds 0 | `condition` field of `match_pattern` |
+
+Macro invocations are opaque token trees in the grammar and add nothing.
+
+Python:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_statement`, `for_statement`, `while_statement`, `match_statement`, `except_clause`, `conditional_expression`; `for_in_clause` and `if_clause` inside a comprehension, which take the comprehension's nesting and raise it for nothing in the comprehension |
+| header | `condition` of `if_statement`, `elif_clause`, `while_statement`; `left` and `right` of `for_statement`; `subject` of `match_statement`; the middle child of `conditional_expression` (`a if cond else b`) |
+| else if / else | `elif_clause` / `else_clause` in the `alternative` of an `if_statement` |
+| not counted | `else_clause` of a loop or `try`, whose body stays at the level of the loop body or `try` body |
+| sequence | `boolean_operator` with operator `and`, `or` |
+| guard, adds 0 | `if_clause` in the `guard` field of `case_clause` |
+
+Go:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_statement`, `for_statement`, `expression_switch_statement`, `type_switch_statement`, `select_statement` |
+| header | `initializer` and `condition` of `if_statement`; children before `body` of `for_statement`; `initializer`, `value`, `alias` of switches |
+| else if / else | `if_statement` in the `alternative` field of an `if_statement` / a `block` there |
+| labeled jump | `break_statement`, `continue_statement` with a `label_name` child; every `goto_statement` |
+| sequence | `binary_expression` with operator `&&`, `\|\|` |
+
+A tagless `switch` is still one structural increment, like any other.
+
+Svelte `<template>`. Block structure is scored from the Svelte grammar,
+independently of the script rules:
+
+| Rule | Node kinds |
+|---|---|
+| structural | `if_statement`, `each_statement`, `await_statement` |
+| nesting | every child of those statements other than the start tag sits one level deeper; inside `else_if_block` and `else_block`, the `else_if_start` / `else_start` tag and its `condition` stay at the statement's level and the block's other children sit one level deeper, like the statement's own body |
+| else if / else | `else_if_block` / `else_block`, flat 1 each, in both `{#if}` and `{#each}` |
+| adds 0 | `then_block`, `catch_block`, `key_statement`, `snippet_statement`, which also leave nesting alone |
+
+An `{#await}` block is one structural increment for all its branches, like a
+`switch` over the promise's states. The `{#each}` grammar puts the content
+after `{:else}` beside the `else_block` rather than inside it; it still sits one
+level deeper by the first nesting rule.
+
+Template expressions are scored from these `svelte_raw_text` nodes only: the
+`condition` of `if_start` and `else_if_start`, the `identifier` of
+`each_start`, the text of `await_start` and `key_start`, the content of every
+`expression` node (element content and attribute values), and the text of
+`{@const}`, `{@html}`, and `{@render}` tags. Bindings are not scored: the
+`parameter` of `each_start`, `then_start` and `catch_start` bindings, and
+snippet parameters. Each scored text is wrapped as
+`function expression() { return (<text>); }`, the wrapper `bool_ops` already
+uses, parsed with the component's script grammar (TypeScript when a
+`<script lang="ts">` is present, otherwise JavaScript), and scored with the
+JavaScript rules at the nesting level of its enclosing block, so an `{#if}`
+condition sits at the block's own level and an expression in its body one level
+deeper. Nodes inside an `ERROR` subtree add nothing, so an `{#await p then v}`
+text that does not parse as an expression scores 0. Functions inside template
+expressions are not reported on their own, so their bodies count toward
+`<template>` at that same level instead of being excluded. These rules score
+whatever unit the template is measured as, so a change to template scoping
+(issue #8) does not change them.
+
+#### Deviations from the white paper
+
+Nested functions are scored separately and do not raise nesting in the
+enclosing function; the paper nests lambdas into their parent. Keeping every
+metric on the same function boundary matters more here than matching the paper,
+and callback-heavy code would otherwise be charged twice. The one exception is
+a function inside a Svelte template expression, which is never reported on its
+own and so counts toward `<template>` without raising nesting.
+
+Recursion is not counted. The paper adds 1 per method in a recursion cycle,
+which needs call resolution. A single-file syntactic pass cannot tell a
+self-call from a same-named method on another receiver and cannot see indirect
+cycles, so any answer it gave would be a guess.
+
+Boolean sequences follow the parse tree rather than the token stream. The two
+agree on the paper's examples, but `a || b && c || d` scores 2 here where a
+token reading gives 3, because `b && c` is one operand of a single `||` run.
+
+`??` and the logical assignment forms count as sequences, matching `complexity`
+and `bool_ops`. The paper does not cover these constructs, which are defined
+above: Rust `loop`, `while let`, `let ... else` (scored as an `if`), and let
+chains; Dart `on T` handlers and collection `if` / `for`; Python comprehension
+clauses; Go `select` and `goto`; and Svelte template blocks.
+
+#### Limits and rollout
+
+`cognitive` defaults to 15 and applies to every language, including Svelte
+`<template>`, and to test files. It is configured like every other metric
+(`limits.cognitive`, `languages.<name>.limits.cognitive`), reported with
+`metric` set to `cognitive`, and leaves the JSON shape and exit codes unchanged.
+
+Once `cognitive` ships, `complexity` stops being the primary measure and
+becomes a backstop for sheer path count. Its default rises in the same release
+to a value calibrated on the corpus behind issue #6, chosen so that flat
+dispatch (a 30-arm `switch`, a large Rust `match` on an enum) passes; the
+calibrated value replaces 15 in the metrics table. Repo overrides of
+`complexity` keep working and can be removed. The release notes call out the
+recalibration, since a new default limit can fail existing repos on upgrade.
+
 ### Function identification
 
 Functions are: function declarations, methods, constructors, getters/setters,
@@ -225,9 +438,10 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 
 ### Per-language notes (record any others found during implementation here)
 
-- Rust: `match` arms count individually (a 20-arm `match` on an enum is 20). This
-  is stricter than clippy's cognitive metric by design; use a repo override if a
-  crate is dominated by large dispatch matches.
+- Rust: `match` arms count individually for `complexity` (a 20-arm `match` on an
+  enum is 20). `cognitive` scores the same `match` 1, which is what lets
+  `complexity` act as a backstop instead of needing repo overrides for large
+  dispatch matches.
 - Go: no ternary; `switch` with no tag counts each `case`; `select` counts each
   `case`.
 - Python: `match` `case` arms count; `case _` does not. Comprehension `for` and
@@ -409,7 +623,8 @@ Resolution, later wins, shallow merge per top-level key:
 
 ```json
 {
-  "limits": { "complexity": 15, "depth": 4, "lines": 100, "params": 6 },
+  "limits": { "complexity": 15, "cognitive": 15, "depth": 4, "lines": 100, "params": 6,
+              "bool_ops": 3, "widget_depth": 7 },
   "tests": {
     "patterns": ["**/*.test.*", "**/*.spec.*", "**/*_test.go", "**/test_*.py",
                  "**/*_test.py", "**/*_test.dart", "**/test/**", "**/tests/**",
@@ -444,11 +659,12 @@ written into the checked repository except by `init`.
 ## Golden fixtures
 
 `tests/fixtures/<language>/` holds source files plus `expected.json`
-(`[{function, line, complexity, depth, lines, params}]`). Each language has at
-least: one trivial function, one function at exactly the limit, one over each
-limit, nested functions, every decision-point kind listed above for that language,
-and (Svelte) a template with several top-level blocks, nested blocks, a
-`{#key}` block, and a snippet nested inside a block.
+(`[{function, line, complexity, cognitive, depth, lines, params, bool_ops,
+widget_depth}]`). Each language has at least: one trivial function, one function
+at exactly the limit, one over each limit, nested functions, every
+decision-point kind listed above for that language, and (Svelte) a template
+with several top-level blocks, nested blocks, a `{#key}` block, and a snippet
+nested inside a block.
 
 Reference numbers are derived once from the reference tool and recorded in the
 fixture's `expected.json` under `reference` with the tool name and version:
@@ -464,6 +680,16 @@ fixture, where `delta` is recorded per function in the reference entry with the 
 language fixture includes a multi-branch `else if` chain, a `try`/`catch`, an
 operator inside a string literal, and an anonymous callback inside a named
 function.
+
+`cognitive` has no reference tool that implements this exact variant, so every
+`cognitive` value is hand-derived, with the derivation recorded per function as
+for other hand-derived entries. Each language fixture adds, where the language
+has the construct: a flat dispatch with many arms scoring 1, a mixed boolean
+sequence, a labeled jump, a construct nested three deep, and three negative
+cases: an operator inside a string literal adds nothing, an unbraced
+`else <loop>` scores as `else` plus a nested loop rather than an `else if`,
+and a guard arm (`_ when`, `_ if`, `case _ if`) adds nothing beyond the
+operators in its guard.
 
 ## Repository gates
 
