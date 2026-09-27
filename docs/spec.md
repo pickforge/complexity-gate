@@ -173,7 +173,8 @@ Names:
 - named function/method → `name`; methods → `Type.name` when the type is known
 - anonymous assigned to a binding → the binding name (`const handler = () => …` → `handler`; `foo: () => …` → `foo`)
 - anonymous otherwise → `<anonymous>`
-- Svelte template → `<template>` (one synthetic function per component; see Svelte)
+- Svelte template → `{#if}`, `{#each}`, `{#await}`, `{#snippet name}`, and the
+  root `<template>` (synthetic units; see Svelte)
 
 Each function is reported once with its own metrics. Nested functions are reported
 separately; their decisions and depth are excluded from the parent, their lines
@@ -201,10 +202,25 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 - `<script>` and `<script context="module">` / `<script module>` blocks are
   parsed with the TypeScript grammar (`lang="ts"`) or JavaScript grammar. Functions
   inside are reported normally with their real line numbers in the `.svelte` file.
-- The template is one synthetic function `<template>` whose decision points are
-  `{#if}`, `{:else if}`, `{#each}`, `{#await}`, `{:catch}`, and the boolean /
-  ternary operators inside `{…}` expressions. Depth follows block nesting.
-  `<template>` is exempt from `lines` and `params`.
+- The template is split into synthetic units, so a report points at a block
+  rather than at line 1 and scales with the block, not the file:
+  - each top-level `{#if}`, `{#each}`, or `{#await}` block is a unit named
+    after its tag (`{#if}`) at the line of its opening tag. It includes its
+    `{:else if}`, `{:else}`, `{:then}`, and `{:catch}` branches and every block
+    nested inside it. Top-level means outside any other template unit;
+    elements and `{#key}` blocks are transparent.
+  - each `{#snippet name(…)}` is a unit named `{#snippet name}` at its opening
+    line, wherever it appears. Its contents, including the blocks inside it,
+    count toward the snippet and are excluded from the enclosing unit, like a
+    nested function.
+  - the root `<template>` unit at line 1 holds expressions outside any other
+    unit.
+- Every unit starts at complexity 1. Decision points are `{#if}`,
+  `{:else if}`, `{#each}`, `{#await}`, `{:catch}`, and the boolean / ternary
+  operators inside `{…}` expressions, counted in the unit that contains them.
+  Depth follows `{#if}`/`{#each}`/`{#await}` nesting within a unit, so a block
+  unit has depth at least 1; snippets and `{#key}` add no depth. Template
+  units are exempt from `lines` and `params`.
 - Style blocks are ignored.
 
 ### Per-language notes (record any others found during implementation here)
@@ -431,7 +447,8 @@ written into the checked repository except by `init`.
 (`[{function, line, complexity, depth, lines, params}]`). Each language has at
 least: one trivial function, one function at exactly the limit, one over each
 limit, nested functions, every decision-point kind listed above for that language,
-and (Svelte) a template with nested blocks.
+and (Svelte) a template with several top-level blocks, nested blocks, a
+`{#key}` block, and a snippet nested inside a block.
 
 Reference numbers are derived once from the reference tool and recorded in the
 fixture's `expected.json` under `reference` with the tool name and version:
