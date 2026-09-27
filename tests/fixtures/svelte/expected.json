@@ -6,9 +6,9 @@
       {
         "function": "<template>",
         "line": 1,
-        "complexity": 12,
+        "complexity": 3,
         "hand_derived": true,
-        "derivation": "base complexity 1 + five template blocks + six expression operators"
+        "derivation": "base complexity 1 + two expression operators outside any block"
       },
       {
         "function": "trivial",
@@ -88,6 +88,27 @@
         "complexity": 4,
         "hand_derived": true,
         "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+      },
+      {
+        "function": "{#if}",
+        "line": 208,
+        "complexity": 10,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + five template blocks + four expression operators"
+      },
+      {
+        "function": "{#each}",
+        "line": 227,
+        "complexity": 3,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + the each block + one expression operator; the nested snippet is excluded"
+      },
+      {
+        "function": "{#snippet row}",
+        "line": 229,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base complexity 1 + one template block + two expression operators"
       }
     ]
   },
@@ -95,8 +116,8 @@
     {
       "function": "<template>",
       "line": 1,
-      "complexity": 12,
-      "depth": 3,
+      "complexity": 3,
+      "depth": 0,
       "lines": 0,
       "params": 0,
       "bool_ops": 1,
@@ -249,6 +270,36 @@
       "depth": 0,
       "lines": 3,
       "params": 5,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "{#if}",
+      "line": 208,
+      "complexity": 10,
+      "depth": 3,
+      "lines": 0,
+      "params": 0,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "{#each}",
+      "line": 227,
+      "complexity": 3,
+      "depth": 1,
+      "lines": 0,
+      "params": 0,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "{#snippet row}",
+      "line": 229,
+      "complexity": 4,
+      "depth": 1,
+      "lines": 0,
+      "params": 0,
       "bool_ops": 1,
       "widget_depth": 0
     }

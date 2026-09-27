@@ -1046,7 +1046,7 @@ fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
             block.start_line,
         )?);
     }
-    functions.push(measure_template(tree.root_node(), source));
+    functions.extend(measure_template(tree.root_node(), source));
     functions.sort_by_key(|item| (item.line, item.end_line));
     Ok(functions)
 }
@@ -1097,17 +1097,97 @@ fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
     blocks
 }
 
-fn measure_template(root: Node<'_>, source: &str) -> FunctionMetrics {
+const TEMPLATE_BLOCKS: [&str; 3] = ["if_statement", "each_statement", "await_statement"];
+
+fn measure_template(root: Node<'_>, source: &str) -> Vec<FunctionMetrics> {
+    let mut units = Vec::new();
     let mut score = Score {
         complexity: 1,
         depth: 0,
         bool_ops: 0,
     };
-    measure_svelte_node(root, source, 0, &mut score);
+    score_svelte_node(root, source, 0, true, &mut score, &mut units);
+    let end_line = source.lines().count().max(1);
+    units.push(template_metrics(
+        "<template>".to_owned(),
+        1,
+        end_line,
+        &score,
+    ));
+    units
+}
+
+fn measure_svelte_node(
+    node: Node<'_>,
+    source: &str,
+    depth: usize,
+    root: bool,
+    score: &mut Score,
+    units: &mut Vec<FunctionMetrics>,
+) {
+    match node.kind() {
+        "script_element" | "style_element" => {}
+        "snippet_statement" => {
+            let unit = measure_template_unit(node, source, units);
+            units.push(unit);
+        }
+        kind if root && TEMPLATE_BLOCKS.contains(&kind) => {
+            let unit = measure_template_unit(node, source, units);
+            units.push(unit);
+        }
+        _ => score_svelte_node(node, source, depth, root, score, units),
+    }
+}
+
+fn measure_template_unit(
+    node: Node<'_>,
+    source: &str,
+    units: &mut Vec<FunctionMetrics>,
+) -> FunctionMetrics {
+    let mut score = Score {
+        complexity: 1,
+        depth: 0,
+        bool_ops: 0,
+    };
+    score_svelte_node(node, source, 0, false, &mut score, units);
+    template_metrics(
+        template_unit_name(node, source),
+        node.start_position().row + 1,
+        node.end_position().row + 1,
+        &score,
+    )
+}
+
+fn template_unit_name(node: Node<'_>, source: &str) -> String {
+    match node.kind() {
+        "if_statement" => "{#if}".to_owned(),
+        "each_statement" => "{#each}".to_owned(),
+        "await_statement" => "{#await}".to_owned(),
+        _ => {
+            let name = node
+                .named_child(0)
+                .and_then(|start| {
+                    let mut cursor = start.walk();
+                    start
+                        .named_children(&mut cursor)
+                        .find(|child| child.kind() == "snippet_name")
+                })
+                .map_or("", |name| node_text(name, source));
+            format!("{{#snippet {name}}}")
+        }
+    }
+}
+
+fn template_metrics(
+    function: String,
+    line: usize,
+    end_line: usize,
+    score: &Score,
+) -> FunctionMetrics {
     FunctionMetrics {
-        function: "<template>".to_owned(),
-        line: 1,
-        end_line: source.lines().count().max(1),
+        function,
+        line,
+        end_line,
         complexity: score.complexity,
         depth: score.depth,
         lines: 0,
@@ -1117,10 +1197,14 @@ fn measure_template(root: Node<'_>, source: &str) -> FunctionMetrics {
     }
 }
 
-fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut Score) {
-    if matches!(node.kind(), "script_element" | "style_element") {
-        return;
-    }
+fn score_svelte_node(
+    node: Node<'_>,
+    source: &str,
+    depth: usize,
+    root: bool,
+    score: &mut Score,
+    units: &mut Vec<FunctionMetrics>,
+) {
     if matches!(
         node.kind(),
         "if_start" | "else_if_start" | "each_start" | "await_start" | "catch_start"
@@ -1132,15 +1216,11 @@ fn measure_svelte_node(node: Node<'_>, source: &str, depth: usize, score: &mut S
         score.complexity += expression_decisions(expression);
         score.bool_ops = score.bool_ops.max(expression_bool_ops(expression));
     }
-    let opens = matches!(
-        node.kind(),
-        "if_statement" | "each_statement" | "await_statement"
-    );
-    let next_depth = depth + usize::from(opens);
+    let next_depth = depth + usize::from(TEMPLATE_BLOCKS.contains(&node.kind()));
     score.depth = score.depth.max(next_depth);
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        measure_svelte_node(child, source, next_depth, score);
+        measure_svelte_node(child, source, next_depth, root, score, units);
     }
 }
 

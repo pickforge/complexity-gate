@@ -222,4 +222,19 @@ function ternaryBreak(a: boolean, b: boolean, c: boolean, d: boolean, e: boolean
 <p>{`s: ${ready && value}`}</p>
 <p>{a && b /* || */}</p>
 
+<!-- {#key} is transparent: the {#each} is a top-level unit -->
+{#key value}
+  {#each items as item} <!-- +1 each -->
+    <!-- own unit; its decisions are not counted in the {#each} -->
+    {#snippet row(entry)}
+      {#if entry.done && ready} <!-- +1 if, +1 && -->
+        <p>{entry ? entry : value}</p> <!-- +1 ternary -->
+      {/if}
+    {/snippet}
+    {@render row(item)}
+  {:else}
+    <p>{ready || value}</p> <!-- +1 || -->
+  {/each}
+{/key}
+
 <style>.x { color: red; }</style>
