@@ -283,6 +283,7 @@ fn add_violations(
     let limits = config.limits_for(language.name());
     let metrics = [
         ("complexity", function.complexity, limits.complexity),
+        ("cognitive", function.cognitive, limits.cognitive),
         ("depth", function.depth, limits.depth),
         ("lines", function.lines, limits.lines),
         ("params", function.params, limits.params),
@@ -290,7 +291,10 @@ fn add_violations(
         ("widget_depth", function.widget_depth, limits.widget_depth),
     ];
     for (metric, value, limit) in metrics {
-        if value <= limit || test_file && config.tests.exempt.iter().any(|item| item == metric) {
+        let Some(limit) = limit.filter(|limit| value > *limit) else {
+            continue;
+        };
+        if test_file && config.tests.exempt.iter().any(|item| item == metric) {
             continue;
         }
         result.violations.push(Violation {

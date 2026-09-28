@@ -197,3 +197,59 @@ def bool_chain(a, b, c, d):
 
 def ternary_break(a, b, c, d, flag):
     return (a and b) if flag else (c or d)
+
+def cognitive_at_limit(x, n):
+    for a in x:
+        for b in a:
+            for c in b:
+                if c > 0:
+                    n += 1
+                elif c < 0:
+                    n -= 1
+                else:
+                    n = a and b or c
+    return 1 if n else 0
+
+def over_cognitive(x, n):
+    for a in x:
+        for b in a:
+            for c in b:
+                if c > 0:
+                    n += 1
+                elif c < 0:
+                    n -= 1
+                else:
+                    n = a and b or c
+    n = n or 0
+    return 1 if n else 0
+
+def flat_dispatch(kind):
+    match kind:
+        case 1: return "one"
+        case 2: return "two"
+        case 3: return "three"
+        case 4: return "four"
+        case _: return "other"
+
+def mixed_sequence(a, b, c, d):
+    return (a or b and c or d) and not (a and b)
+
+def comprehension_and_loop_else(rows):
+    for row in rows:
+        if not row:
+            break
+    else:
+        return [cell for row in rows for cell in row if cell]
+    return []
+
+def guard_arm(x, a, b):
+    match x:
+        case 1: return 1
+        case _ if a and b: return 2
+        case _: return 0
+
+def commented_conditional(a, b, c, d):
+    return (a
+            # a comment is not the condition
+            if (b if c else d)
+            else d)

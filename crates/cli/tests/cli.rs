@@ -599,7 +599,7 @@ fn git(cwd: &Path, args: &[&str]) {
 }
 
 fn complex_function() -> String {
-    let decisions = (0..15)
+    let decisions = (0..16)
         .map(|index| format!("if (x === {index}) x++;"))
         .collect::<Vec<_>>()
         .join("\n");

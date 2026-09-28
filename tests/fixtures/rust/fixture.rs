@@ -194,3 +194,65 @@ fn comment_lines(ptr: &mut i32) -> i32 {
 fn bool_chain(a: bool, b: bool, c: bool, d: bool) -> bool {
     a && (b || c) && d
 }
+
+fn cognitive_at_limit(x: &[Vec<Vec<i32>>], mut n: i32) -> i32 {
+    for a in x {
+        for b in a {
+            for c in b {
+                if *c > 0 { n += 1; }
+                else if *c < 0 { n -= 1; }
+                else { n = i32::from(a.is_empty() && b.is_empty() || *c == 0); }
+            }
+        }
+    }
+    match n { 0 => 0, _ => 1 }
+}
+
+fn over_cognitive(x: &[Vec<Vec<i32>>], mut n: i32) -> i32 {
+    let Some(first) = x.first() else { return 0; };
+    n += first.len() as i32;
+    for a in x {
+        for b in a {
+            for c in b {
+                if *c > 0 { n += 1; }
+                else if *c < 0 { n -= 1; }
+                else { n = i32::from(a.is_empty() && b.is_empty() || *c == 0); }
+            }
+        }
+    }
+    match n { 0 => 0, _ => 1 }
+}
+
+fn flat_dispatch(kind: i32) -> &'static str {
+    match kind {
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        4 => "four",
+        _ => "other",
+    }
+}
+
+fn mixed_sequence(a: bool, b: bool, c: bool, d: bool) -> bool {
+    (a || b && c || d) && !(a && b)
+}
+
+fn labeled_jump(rows: &[Vec<i32>]) {
+    'outer: for row in rows {
+        for cell in row {
+            if *cell > 0 { continue 'outer; }
+        }
+    }
+}
+
+fn guard_arm(x: i32, a: bool, b: bool) -> i32 {
+    match x {
+        1 => 1,
+        _ if a && b => 2,
+        _ => 0,
+    }
+}
+
+fn let_chain(x: Option<i32>, y: Option<i32>, c: bool, d: bool) -> i32 {
+    if let Some(a) = x && let Some(b) = y && (c || d) { a + b } else { 0 }
+}

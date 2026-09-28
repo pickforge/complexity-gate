@@ -1,6 +1,7 @@
 {
   "limits": {
-    "complexity": 15,
+    "complexity": null,
+    "cognitive": 15,
     "depth": 4,
     "lines": 100,
     "params": 6,

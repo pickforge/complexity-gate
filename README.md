@@ -85,14 +85,16 @@ Each function is measured on its own. A violation is `value > limit`.
 
 | Metric | Measures | Default limit |
 |---|---|---|
-| `complexity` | Cyclomatic complexity: 1 + decision points | 15 |
+| `cognitive` | Cognitive complexity: flow breaks weighted by nesting | 15 |
+| `complexity` | Cyclomatic complexity: 1 + decision points | off (`null`) |
 | `depth` | Deepest control-flow nesting | 4 |
 | `lines` | Significant lines, without blanks and comments | 100 |
 | `params` | Declared parameters | 6 |
 | `bool_ops` | Short-circuit operators in one expression | 3 |
 | `widget_depth` | Dart `build` methods: nested widget constructors | 7 |
 
-Test files are exempt from `lines` only. Counting rules per language are in
+A `null` limit turns that check off; set `"complexity": 15` in `limits` to
+restore the cyclomatic gate. Test files are exempt from `lines` only. Counting rules per language are in
 [`docs/spec.md`](docs/spec.md).
 
 ## Renamed from complexity-gate

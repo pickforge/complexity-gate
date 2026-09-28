@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Language as TsLanguage, Node, Parser, Tree};
 
+use crate::cognitive;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {
     JavaScript,
@@ -22,6 +24,7 @@ pub struct FunctionMetrics {
     pub line: usize,
     pub end_line: usize,
     pub complexity: usize,
+    pub cognitive: usize,
     pub depth: usize,
     pub lines: usize,
     pub params: usize,
@@ -63,7 +66,7 @@ impl Language {
         }
     }
 
-    fn grammar(self) -> TsLanguage {
+    pub(crate) fn grammar(self) -> TsLanguage {
         match self {
             Self::JavaScript | Self::Svelte => tree_sitter_javascript::LANGUAGE.into(),
             Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
@@ -339,6 +342,7 @@ fn measure_function(
         line: start + offset,
         end_line: end + offset,
         complexity: score.complexity,
+        cognitive: cognitive::measure_function(node, language, source),
         depth: score.depth,
         lines: significant_lines(source, start, end, node),
         params: parameter_count(node, language, source),
@@ -364,9 +368,7 @@ fn measure_node(
     if node.id() != root_id && is_function(language, node.kind()) {
         return;
     }
-    if is_decision(node, language, source) {
-        score.complexity += 1;
-    }
+    score.complexity += decision_count(node, language, source);
     if is_boolean_chain_root(node, language, source) {
         score.bool_ops = score
             .bool_ops
@@ -403,7 +405,7 @@ fn boolean_operators_in_chain(
     {
         return 0;
     }
-    let own = usize::from(is_boolean_operator(node, language, source));
+    let own = boolean_operator_count(node, language, source);
     let mut cursor = node.walk();
     own + node
         .named_children(&mut cursor)
@@ -430,7 +432,11 @@ fn is_boolean_operator(node: Node<'_>, language: Language, source: &str) -> bool
             ) || node.kind() == "assignment_expression"
                 && has_operator(node, source, &["&&=", "||=", "??="])
         }
-        Language::Rust | Language::Go => {
+        Language::Rust => {
+            node.kind() == "let_chain"
+                || node.kind() == "binary_expression" && has_operator(node, source, &["&&", "||"])
+        }
+        Language::Go => {
             node.kind() == "binary_expression" && has_operator(node, source, &["&&", "||"])
         }
         Language::Python => {
@@ -586,7 +592,7 @@ fn starts_ascii_uppercase(text: &str) -> bool {
         .is_some_and(u8::is_ascii_uppercase)
 }
 
-fn is_function(language: Language, kind: &str) -> bool {
+pub(crate) fn is_function(language: Language, kind: &str) -> bool {
     match language {
         Language::JavaScript | Language::TypeScript | Language::Tsx => matches!(
             kind,
@@ -614,6 +620,29 @@ fn is_function(language: Language, kind: &str) -> bool {
         ),
         Language::Svelte => false,
     }
+}
+
+/// A Rust `let_chain` holds its `&&` tokens as anonymous children rather than
+/// as `binary_expression` nodes, so it carries one operator per token.
+fn let_chain_operators(node: Node<'_>) -> usize {
+    let mut cursor = node.walk();
+    node.children(&mut cursor)
+        .filter(|child| child.kind() == "&&")
+        .count()
+}
+
+fn boolean_operator_count(node: Node<'_>, language: Language, source: &str) -> usize {
+    if node.kind() == "let_chain" {
+        return let_chain_operators(node);
+    }
+    usize::from(is_boolean_operator(node, language, source))
+}
+
+fn decision_count(node: Node<'_>, language: Language, source: &str) -> usize {
+    if language == Language::Rust && node.kind() == "let_chain" {
+        return let_chain_operators(node);
+    }
+    usize::from(is_decision(node, language, source))
 }
 
 fn is_decision(node: Node<'_>, language: Language, source: &str) -> bool {
@@ -647,13 +676,25 @@ fn dart_decision(node: Node<'_>, source: &str) -> bool {
         | "while_statement"
         | "do_statement"
         | "switch_statement_case"
-        | "catch_clause"
         | "conditional_expression" => true,
+        "block" => is_dart_handler(node),
         "switch_expression_case" => !is_default_arm(node, source),
         "logical_and_expression" | "logical_or_expression" | "if_null_expression" => true,
         "assignment_expression" => has_operator(node, source, &["??="]),
         _ => false,
     }
+}
+
+/// Every `block` child of a Dart `try_statement` other than its `body` is a
+/// handler: `on T {}` has no `catch_clause`, so counting that node misses it.
+pub(crate) fn is_dart_handler(node: Node<'_>) -> bool {
+    node.kind() == "block"
+        && node.parent().is_some_and(|parent| {
+            parent.kind() == "try_statement"
+                && parent
+                    .child_by_field_name("body")
+                    .is_none_or(|body| body.id() != node.id())
+        })
 }
 
 fn rust_decision(node: Node<'_>, source: &str) -> bool {
@@ -691,7 +732,7 @@ fn go_decision(node: Node<'_>, source: &str) -> bool {
     }
 }
 
-fn has_operator(node: Node<'_>, source: &str, wanted: &[&str]) -> bool {
+pub(crate) fn has_operator(node: Node<'_>, source: &str, wanted: &[&str]) -> bool {
     if let Some(operator) = node.child_by_field_name("operator") {
         return wanted.contains(&node_text(operator, source));
     }
@@ -1025,7 +1066,7 @@ fn line_has_code(line_start: usize, line: &str, comments: &[(usize, usize)]) -> 
     })
 }
 
-fn node_text<'a>(node: Node<'_>, source: &'a str) -> &'a str {
+pub(crate) fn node_text<'a>(node: Node<'_>, source: &'a str) -> &'a str {
     node.utf8_text(source.as_bytes()).unwrap_or("")
 }
 
@@ -1033,9 +1074,11 @@ fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
     let tree = parse_svelte_tree(source)?;
     let blocks = svelte_blocks(source);
     let mut functions = Vec::new();
+    let mut template_language = Language::JavaScript;
     for block in blocks.iter().filter(|block| block.kind == "script") {
         let language =
             if block.opening.contains("lang=\"ts\"") || block.opening.contains("lang='ts'") {
+                template_language = Language::TypeScript;
                 Language::TypeScript
             } else {
                 Language::JavaScript
@@ -1046,7 +1089,11 @@ fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
             block.start_line,
         )?);
     }
-    functions.extend(measure_template(tree.root_node(), source));
+    functions.extend(measure_template(
+        tree.root_node(),
+        source,
+        template_language,
+    ));
     functions.sort_by_key(|item| (item.line, item.end_line));
     Ok(functions)
 }
@@ -1099,8 +1146,18 @@ fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
 
 const TEMPLATE_BLOCKS: [&str; 3] = ["if_statement", "each_statement", "await_statement"];
 
-fn measure_template(root: Node<'_>, source: &str) -> Vec<FunctionMetrics> {
-    let mut units = Vec::new();
+/// Template units collected so far, plus the grammar of the component's
+/// `<script>`, which `cognitive` also uses to parse template expressions.
+struct TemplateUnits {
+    script: Language,
+    list: Vec<FunctionMetrics>,
+}
+
+fn measure_template(root: Node<'_>, source: &str, script: Language) -> Vec<FunctionMetrics> {
+    let mut units = TemplateUnits {
+        script,
+        list: Vec::new(),
+    };
     let mut score = Score {
         complexity: 1,
         depth: 0,
@@ -1108,13 +1165,10 @@ fn measure_template(root: Node<'_>, source: &str) -> Vec<FunctionMetrics> {
     };
     score_svelte_node(root, source, 0, true, &mut score, &mut units);
     let end_line = source.lines().count().max(1);
-    units.push(template_metrics(
-        "<template>".to_owned(),
-        1,
-        end_line,
-        &score,
-    ));
-    units
+    let mut unit = template_metrics("<template>".to_owned(), 1, end_line, &score);
+    unit.cognitive = cognitive::measure_template_unit(root, source, script, true);
+    units.list.push(unit);
+    units.list
 }
 
 fn measure_svelte_node(
@@ -1123,17 +1177,17 @@ fn measure_svelte_node(
     depth: usize,
     root: bool,
     score: &mut Score,
-    units: &mut Vec<FunctionMetrics>,
+    units: &mut TemplateUnits,
 ) {
     match node.kind() {
         "script_element" | "style_element" => {}
         "snippet_statement" => {
             let unit = measure_template_unit(node, source, units);
-            units.push(unit);
+            units.list.push(unit);
         }
         kind if root && TEMPLATE_BLOCKS.contains(&kind) => {
             let unit = measure_template_unit(node, source, units);
-            units.push(unit);
+            units.list.push(unit);
         }
         _ => score_svelte_node(node, source, depth, root, score, units),
     }
@@ -1142,7 +1196,7 @@ fn measure_svelte_node(
 fn measure_template_unit(
     node: Node<'_>,
     source: &str,
-    units: &mut Vec<FunctionMetrics>,
+    units: &mut TemplateUnits,
 ) -> FunctionMetrics {
     let mut score = Score {
         complexity: 1,
@@ -1150,12 +1204,14 @@ fn measure_template_unit(
         bool_ops: 0,
     };
     score_svelte_node(node, source, 0, false, &mut score, units);
-    template_metrics(
+    let mut unit = template_metrics(
         template_unit_name(node, source),
         node.start_position().row + 1,
         node.end_position().row + 1,
         &score,
-    )
+    );
+    unit.cognitive = cognitive::measure_template_unit(node, source, units.script, false);
+    unit
 }
 
 fn template_unit_name(node: Node<'_>, source: &str) -> String {
@@ -1189,6 +1245,7 @@ fn template_metrics(
         line,
         end_line,
         complexity: score.complexity,
+        cognitive: 0,
         depth: score.depth,
         lines: 0,
         params: 0,
@@ -1203,7 +1260,7 @@ fn score_svelte_node(
     depth: usize,
     root: bool,
     score: &mut Score,
-    units: &mut Vec<FunctionMetrics>,
+    units: &mut TemplateUnits,
 ) {
     if matches!(
         node.kind(),

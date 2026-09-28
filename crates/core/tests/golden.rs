@@ -33,6 +33,8 @@ struct ReferenceFunction {
     hand_derived: bool,
     #[serde(default)]
     derivation: Option<String>,
+    /// `cognitive` has no reference tool, so every value is hand-derived.
+    cognitive_derivation: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -41,6 +43,7 @@ struct Expected {
     function: String,
     line: usize,
     complexity: usize,
+    cognitive: usize,
     depth: usize,
     lines: usize,
     params: usize,
@@ -132,6 +135,11 @@ fn assert_strictness(actual: &[Expected], references: &[ReferenceFunction], dire
                 directory.display()
             );
         }
+        assert!(
+            !reference.cognitive_derivation.is_empty(),
+            "{key:?} in {} needs a cognitive derivation",
+            directory.display()
+        );
         if reference.hand_derived {
             assert!(
                 reference
@@ -159,6 +167,7 @@ impl From<FunctionMetrics> for Expected {
             function: value.function,
             line: value.line,
             complexity: value.complexity,
+            cognitive: value.cognitive,
             depth: value.depth,
             lines: value.lines,
             params: value.params,

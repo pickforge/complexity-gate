@@ -255,3 +255,80 @@ class ChainedWidget {
   @override
   Widget build(BuildContext context) => Container(child: Text('x')).animate().fadeIn();
 }
+
+int cognitiveAtLimit(List<List<List<int>>> x, int n) {
+  var flag = false;
+  for (final a in x) {
+    for (final b in a) {
+      for (final c in b) {
+        if (c > 0) n++;
+        else if (c < 0) n--;
+        else flag = a.isEmpty && b.isEmpty || c == 0;
+      }
+    }
+  }
+  return flag ? 1 : 0;
+}
+
+int overCognitive(List<List<List<int>>> x, int? n) {
+  var flag = false;
+  for (final a in x) {
+    for (final b in a) {
+      for (final c in b) {
+        if (c > 0) flag = true;
+        else if (c < 0) flag = false;
+        else flag = a.isEmpty && b.isEmpty || c == 0;
+      }
+    }
+  }
+  n ??= 0;
+  return flag ? 1 : 0;
+}
+
+String flatDispatch(int kind) => switch (kind) {
+  1 => 'one',
+  2 => 'two',
+  3 => 'three',
+  4 => 'four',
+  _ => 'other',
+};
+
+bool mixedSequence(bool a, bool b, bool c, bool d) => (a || b && c || d) && !(a && b);
+
+void labeledJump(List<List<int>> rows) {
+  outer:
+  for (final row in rows) {
+    for (final cell in row) {
+      if (cell > 0) continue outer;
+    }
+  }
+}
+
+int unbracedElseLoop(int x) {
+  if (x > 0) x++;
+  else while (x < 0) x++;
+  return x;
+}
+
+int guardArm(int x, bool a, bool b) => switch (x) {
+  1 => 1,
+  _ when a && b => 2,
+  _ => 0,
+};
+
+int handlers(List<int> xs) {
+  try {
+    return xs.first;
+  } on StateError {
+    return 0;
+  } on FormatException catch (e) {
+    return e.offset ?? 1;
+  }
+}
+
+List<int> collection(List<int> xs, bool a, bool b) => [
+  for (final x in xs) x,
+  if (a) 1 else if (b) 2 else 3,
+];
+
+List<dynamic> cascadeElse(bool a, dynamic obj) => [if (a) obj else obj..x = 1];
