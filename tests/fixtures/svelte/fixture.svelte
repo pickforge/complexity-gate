@@ -237,4 +237,15 @@ function ternaryBreak(a: boolean, b: boolean, c: boolean, d: boolean, e: boolean
   {/each}
 {/key}
 
+<!-- cognitive: the each parameter is a binding and is not scored -->
+{#each rows as row, i (row.id)}
+  {@const total = row.a ?? row.b}
+  <button on:click={() => ok && go(total)}>{row.a ? row.b : ""}</button>
+{/each}
+
+<!-- cognitive: "promise then result" does not parse as an expression -->
+{#await promise then result}
+  <p>{result}</p>
+{/await}
+
 <style>.x { color: red; }</style>

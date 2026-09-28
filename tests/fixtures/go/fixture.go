@@ -197,3 +197,84 @@ func commentLines(x int) int {
 func boolChain(a, b, c, d bool) bool {
 	return a && (b || c) && d
 }
+
+func cognitiveAtLimit(x [][][]int, n int) int {
+	for _, a := range x {
+		for _, b := range a {
+			for _, c := range b {
+				if c > 0 {
+					n++
+				} else if c < 0 {
+					n--
+				} else if len(a) == 0 && len(b) == 0 || c == 0 {
+					n = 0
+				}
+			}
+		}
+	}
+	switch {
+	case n > 0:
+		return 1
+	}
+	return 0
+}
+
+func overCognitive(x [][][]int, n int) int {
+	for i := range x {
+		n += i
+	}
+	for _, a := range x {
+		for _, b := range a {
+			for _, c := range b {
+				if c > 0 {
+					n++
+				} else if c < 0 {
+					n--
+				} else if len(a) == 0 && len(b) == 0 || c == 0 {
+					n = 0
+				}
+			}
+		}
+	}
+	switch {
+	case n > 0:
+		return 1
+	}
+	return 0
+}
+
+func flatDispatch(kind int) string {
+	switch kind {
+	case 1:
+		return "one"
+	case 2:
+		return "two"
+	case 3:
+		return "three"
+	case 4:
+		return "four"
+	default:
+		return "other"
+	}
+}
+
+func mixedSequence(a, b, c, d bool) bool {
+	return (a || b && c || d) && !(a && b)
+}
+
+func labeledJump(rows [][]int) int {
+	n := 0
+outer:
+	for _, row := range rows {
+		for _, cell := range row {
+			if cell > 0 {
+				continue outer
+			}
+			if cell < 0 {
+				goto done
+			}
+		}
+	}
+done:
+	return n
+}

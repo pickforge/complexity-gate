@@ -1,5 +1,6 @@
 #![deny(clippy::cognitive_complexity, clippy::too_many_lines)]
 
+mod cognitive;
 pub mod config;
 pub mod diff;
 pub mod language;

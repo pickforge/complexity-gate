@@ -6,77 +6,146 @@
       {
         "function": "trivial",
         "line": 1,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "at_limit",
         "line": 3,
-        "complexity": 15
+        "complexity": 15,
+        "cognitive_derivation": "14 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "over_complexity",
         "line": 21,
-        "complexity": 16
+        "complexity": 16,
+        "cognitive_derivation": "15 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "over_depth",
         "line": 40,
         "complexity": 5,
         "delta": 1,
-        "delta_reason": "tree-sitter counts the Rust loop expression that lizard omits"
+        "delta_reason": "tree-sitter counts the Rust loop expression that lizard omits",
+        "cognitive_derivation": "if +1; while +2; for +3; loop +4; if +5; unlabeled break adds nothing"
       },
       {
         "function": "over_lines",
         "line": 55,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "straight-line code, no flow breaks"
       },
       {
         "function": "over_params",
         "line": 158,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "nested",
         "line": 160,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "the nested function is scored on its own and adds nothing here"
       },
       {
         "function": "decisions",
         "line": 165,
         "complexity": 9,
         "delta": 3,
-        "delta_reason": "tree-sitter counts loop, let-else, and one match arm that lizard omits"
+        "delta_reason": "tree-sitter counts loop, let-else, and one match arm that lizard omits",
+        "cognitive_derivation": "if +1; if let +1; for +1; while +1; loop +1; match +1; if +1 with || +1, && +1; let-else +1"
       },
       {
         "function": "review_cases",
         "line": 177,
-        "complexity": 5
+        "complexity": 5,
+        "cognitive_derivation": "if +1; two else ifs +1 each; else +1; if +1; the string and the closure add nothing"
       },
       {
         "function": "comment_lines",
         "line": 188,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "inner",
         "line": 161,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "base complexity 1; the closure has no decision points"
+        "derivation": "base complexity 1; the closure has no decision points",
+        "cognitive_derivation": "closure with no flow breaks"
       },
       {
         "function": "<anonymous>",
         "line": 184,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "base complexity 1; the closure has no decision points"
+        "derivation": "base complexity 1; the closure has no decision points",
+        "cognitive_derivation": "callback with no flow breaks"
       },
       {
         "function": "bool_chain",
         "line": 194,
         "complexity": 4,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "a and (b or c) and d: one and run +1, the parenthesised or changes operator +1"
+      },
+      {
+        "function": "cognitive_at_limit",
+        "line": 198,
+        "complexity": 9,
+        "hand_derived": true,
+        "derivation": "base 1; three loops +3; if, elif/else if +2; two boolean operators +2; conditional or non-default match arm +1",
+        "cognitive_derivation": "for +1, for +2, for +3; if +4; else if +1; else +1; && then || +2; match +1"
+      },
+      {
+        "function": "over_cognitive",
+        "line": 211,
+        "complexity": 10,
+        "hand_derived": true,
+        "derivation": "as cognitive_at_limit (9) plus the added let-else or operator +1",
+        "cognitive_derivation": "let-else +1 plus the cognitive_at_limit body (15)"
+      },
+      {
+        "function": "flat_dispatch",
+        "line": 226,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "base 1 plus one per non-default arm",
+        "cognitive_derivation": "one match at nesting 0, +1; arms add nothing"
+      },
+      {
+        "function": "mixed_sequence",
+        "line": 236,
+        "complexity": 6,
+        "hand_derived": true,
+        "derivation": "base 1 plus five short-circuit operators",
+        "cognitive_derivation": "outer and/&& +1; parenthesised or/|| changes operator +1; b and/&& c inside it +1; negation ends the run so not/!(a and/&& b) +1"
+      },
+      {
+        "function": "labeled_jump",
+        "line": 240,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1; two loops +2; if +1",
+        "cognitive_derivation": "for +1; for +2; if +3; continue 'outer +1"
+      },
+      {
+        "function": "guard_arm",
+        "line": 248,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1; non-default arm +1; guard +1; boolean operator +1",
+        "cognitive_derivation": "match +1; the _ if guard adds nothing; a && b +1"
+      },
+      {
+        "function": "let_chain",
+        "line": 256,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "base 1; if +1; two && in the let chain +2; || +1",
+        "cognitive_derivation": "if +1; the let chain's && run +1; parenthesised || +1; else +1"
       }
     ]
   },
@@ -85,6 +154,7 @@
       "function": "trivial",
       "line": 1,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -95,6 +165,7 @@
       "function": "at_limit",
       "line": 3,
       "complexity": 15,
+      "cognitive": 14,
       "depth": 1,
       "lines": 17,
       "params": 1,
@@ -105,6 +176,7 @@
       "function": "over_complexity",
       "line": 21,
       "complexity": 16,
+      "cognitive": 15,
       "depth": 1,
       "lines": 18,
       "params": 1,
@@ -115,6 +187,7 @@
       "function": "over_depth",
       "line": 40,
       "complexity": 6,
+      "cognitive": 15,
       "depth": 5,
       "lines": 14,
       "params": 1,
@@ -125,6 +198,7 @@
       "function": "over_lines",
       "line": 55,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 102,
       "params": 1,
@@ -135,6 +209,7 @@
       "function": "over_params",
       "line": 158,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 7,
@@ -145,6 +220,7 @@
       "function": "nested",
       "line": 160,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 4,
       "params": 1,
@@ -155,6 +231,7 @@
       "function": "inner",
       "line": 161,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -165,6 +242,7 @@
       "function": "decisions",
       "line": 165,
       "complexity": 12,
+      "cognitive": 10,
       "depth": 1,
       "lines": 11,
       "params": 2,
@@ -175,6 +253,7 @@
       "function": "review_cases",
       "line": 177,
       "complexity": 5,
+      "cognitive": 5,
       "depth": 1,
       "lines": 10,
       "params": 3,
@@ -185,6 +264,7 @@
       "function": "<anonymous>",
       "line": 184,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -195,6 +275,7 @@
       "function": "comment_lines",
       "line": 188,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 4,
       "params": 1,
@@ -205,7 +286,85 @@
       "function": "bool_chain",
       "line": 194,
       "complexity": 4,
+      "cognitive": 2,
       "depth": 0,
+      "lines": 3,
+      "params": 4,
+      "bool_ops": 3,
+      "widget_depth": 0
+    },
+    {
+      "function": "cognitive_at_limit",
+      "line": 198,
+      "complexity": 9,
+      "cognitive": 15,
+      "depth": 4,
+      "lines": 12,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "over_cognitive",
+      "line": 211,
+      "complexity": 10,
+      "cognitive": 16,
+      "depth": 4,
+      "lines": 14,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "flat_dispatch",
+      "line": 226,
+      "complexity": 5,
+      "cognitive": 1,
+      "depth": 1,
+      "lines": 9,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "mixed_sequence",
+      "line": 236,
+      "complexity": 6,
+      "cognitive": 4,
+      "depth": 0,
+      "lines": 3,
+      "params": 4,
+      "bool_ops": 5,
+      "widget_depth": 0
+    },
+    {
+      "function": "labeled_jump",
+      "line": 240,
+      "complexity": 4,
+      "cognitive": 7,
+      "depth": 3,
+      "lines": 7,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "guard_arm",
+      "line": 248,
+      "complexity": 4,
+      "cognitive": 2,
+      "depth": 1,
+      "lines": 7,
+      "params": 3,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "let_chain",
+      "line": 256,
+      "complexity": 5,
+      "cognitive": 4,
+      "depth": 1,
       "lines": 3,
       "params": 4,
       "bool_ops": 3,

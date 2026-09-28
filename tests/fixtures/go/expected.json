@@ -6,78 +6,132 @@
       {
         "function": "trivial",
         "line": 3,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "atLimit",
         "line": 5,
-        "complexity": 15
+        "complexity": 15,
+        "cognitive_derivation": "14 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "overComplexity",
         "line": 23,
-        "complexity": 16
+        "complexity": 16,
+        "cognitive_derivation": "15 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "overDepth",
         "line": 42,
-        "complexity": 6
+        "complexity": 6,
+        "cognitive_derivation": "if +1; for +2; for +3; select +4; if in a case +5"
       },
       {
         "function": "overLines",
         "line": 57,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "straight-line code, no flow breaks"
       },
       {
         "function": "overParams",
         "line": 160,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "nested",
         "line": 162,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "the nested function is scored on its own and adds nothing here"
       },
       {
         "function": "decisions",
         "line": 167,
-        "complexity": 12
+        "complexity": 12,
+        "cognitive_derivation": "if +1; three-clause for +1; range for +1; switch +1; type switch +1; select +1; if +1 with || +1, && +1"
       },
       {
         "function": "Counter.increment",
         "line": 179,
-        "complexity": 2
+        "complexity": 2,
+        "cognitive_derivation": "one if or conditional at nesting 0, +1"
       },
       {
         "function": "reviewCases",
         "line": 181,
-        "complexity": 5
+        "complexity": 5,
+        "cognitive_derivation": "if +1; two else ifs +1 each; else +1; if +1; the string and the literal add nothing"
       },
       {
         "function": "commentLines",
         "line": 192,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "inner",
         "line": 163,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "base complexity 1; the function literal has no decision points"
+        "derivation": "base complexity 1; the function literal has no decision points",
+        "cognitive_derivation": "function literal with no flow breaks"
       },
       {
         "function": "<anonymous>",
         "line": 188,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "base complexity 1; the function literal has no decision points"
+        "derivation": "base complexity 1; the function literal has no decision points",
+        "cognitive_derivation": "callback with no flow breaks"
       },
       {
         "function": "boolChain",
         "line": 197,
         "complexity": 4,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "a && (b || c) && d: one && run +1, the parenthesised || changes operator +1"
+      },
+      {
+        "function": "cognitiveAtLimit",
+        "line": 201,
+        "complexity": 10,
+        "hand_derived": true,
+        "derivation": "base 1; three loops +3; if, else if +2; && and || +2; conditional +1",
+        "cognitive_derivation": "for +1, for +2, for +3; if +4; two else ifs +1 each; && then || +2; tagless switch +1"
+      },
+      {
+        "function": "overCognitive",
+        "line": 222,
+        "complexity": 11,
+        "hand_derived": true,
+        "derivation": "as cognitiveAtLimit (9) plus the added operator or loop +1",
+        "cognitive_derivation": "range for +1 plus the cognitiveAtLimit body (15)"
+      },
+      {
+        "function": "flatDispatch",
+        "line": 246,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "base 1 plus one per non-default case",
+        "cognitive_derivation": "one switch at nesting 0, +1; arms add nothing"
+      },
+      {
+        "function": "mixedSequence",
+        "line": 261,
+        "complexity": 6,
+        "hand_derived": true,
+        "derivation": "base 1 plus five short-circuit operators",
+        "cognitive_derivation": "outer && +1; parenthesised || changes operator +1; b && c inside || +1; negation ends the run so !(a && b) +1"
+      },
+      {
+        "function": "labeledJump",
+        "line": 265,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "base 1 plus each loop and if",
+        "cognitive_derivation": "for +1; for +2; if +3 with continue outer +1; if +3 with goto done +1"
       }
     ]
   },
@@ -86,6 +140,7 @@
       "function": "trivial",
       "line": 3,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -96,6 +151,7 @@
       "function": "atLimit",
       "line": 5,
       "complexity": 15,
+      "cognitive": 14,
       "depth": 1,
       "lines": 17,
       "params": 1,
@@ -106,6 +162,7 @@
       "function": "overComplexity",
       "line": 23,
       "complexity": 16,
+      "cognitive": 15,
       "depth": 1,
       "lines": 18,
       "params": 1,
@@ -116,6 +173,7 @@
       "function": "overDepth",
       "line": 42,
       "complexity": 6,
+      "cognitive": 15,
       "depth": 5,
       "lines": 14,
       "params": 1,
@@ -126,6 +184,7 @@
       "function": "overLines",
       "line": 57,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 102,
       "params": 1,
@@ -136,6 +195,7 @@
       "function": "overParams",
       "line": 160,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 7,
@@ -146,6 +206,7 @@
       "function": "nested",
       "line": 162,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 4,
       "params": 1,
@@ -156,6 +217,7 @@
       "function": "inner",
       "line": 163,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -166,6 +228,7 @@
       "function": "decisions",
       "line": 167,
       "complexity": 12,
+      "cognitive": 9,
       "depth": 1,
       "lines": 10,
       "params": 2,
@@ -176,6 +239,7 @@
       "function": "Counter.increment",
       "line": 179,
       "complexity": 2,
+      "cognitive": 1,
       "depth": 1,
       "lines": 1,
       "params": 1,
@@ -186,6 +250,7 @@
       "function": "reviewCases",
       "line": 181,
       "complexity": 5,
+      "cognitive": 5,
       "depth": 1,
       "lines": 10,
       "params": 3,
@@ -196,6 +261,7 @@
       "function": "<anonymous>",
       "line": 188,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -206,6 +272,7 @@
       "function": "commentLines",
       "line": 192,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -216,10 +283,66 @@
       "function": "boolChain",
       "line": 197,
       "complexity": 4,
+      "cognitive": 2,
       "depth": 0,
       "lines": 3,
       "params": 4,
       "bool_ops": 3,
+      "widget_depth": 0
+    },
+    {
+      "function": "cognitiveAtLimit",
+      "line": 201,
+      "complexity": 10,
+      "cognitive": 15,
+      "depth": 4,
+      "lines": 20,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "overCognitive",
+      "line": 222,
+      "complexity": 11,
+      "cognitive": 16,
+      "depth": 4,
+      "lines": 23,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "flatDispatch",
+      "line": 246,
+      "complexity": 5,
+      "cognitive": 1,
+      "depth": 1,
+      "lines": 14,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "mixedSequence",
+      "line": 261,
+      "complexity": 6,
+      "cognitive": 4,
+      "depth": 0,
+      "lines": 3,
+      "params": 4,
+      "bool_ops": 5,
+      "widget_depth": 0
+    },
+    {
+      "function": "labeledJump",
+      "line": 265,
+      "complexity": 5,
+      "cognitive": 11,
+      "depth": 3,
+      "lines": 16,
+      "params": 1,
+      "bool_ops": 0,
       "widget_depth": 0
     }
   ]

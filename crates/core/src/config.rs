@@ -12,6 +12,7 @@ use serde_json::{Map, Value};
 const DEFAULTS: &str = include_str!("../../../config.default.json");
 const LIMIT_KEYS: &[&str] = &[
     "complexity",
+    "cognitive",
     "depth",
     "lines",
     "params",
@@ -19,15 +20,17 @@ const LIMIT_KEYS: &[&str] = &[
     "widget_depth",
 ];
 
+/// A `None` limit is `null` in config: the metric is measured but never fails.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Limits {
-    pub complexity: usize,
-    pub depth: usize,
-    pub lines: usize,
-    pub params: usize,
-    pub bool_ops: usize,
-    pub widget_depth: usize,
+    pub complexity: Option<usize>,
+    pub cognitive: Option<usize>,
+    pub depth: Option<usize>,
+    pub lines: Option<usize>,
+    pub params: Option<usize>,
+    pub bool_ops: Option<usize>,
+    pub widget_depth: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -43,15 +46,61 @@ pub struct HookConfig {
     pub max_blocks: usize,
 }
 
+/// The outer `Option` is whether the key is present; the inner one is the
+/// limit itself, so `null` turns a metric off for one language instead of
+/// inheriting the global limit.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(deny_unknown_fields)]
 pub struct LimitOverrides {
-    pub complexity: Option<usize>,
-    pub depth: Option<usize>,
-    pub lines: Option<usize>,
-    pub params: Option<usize>,
-    pub bool_ops: Option<usize>,
-    pub widget_depth: Option<usize>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub complexity: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cognitive: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub depth: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub lines: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub params: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub bool_ops: Option<Option<usize>>,
+    #[serde(
+        default,
+        deserialize_with = "explicit",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub widget_depth: Option<Option<usize>>,
+}
+
+fn explicit<'de, D>(deserializer: D) -> Result<Option<Option<usize>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::deserialize(deserializer).map(Some)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
@@ -248,6 +297,7 @@ impl Config {
         };
         Limits {
             complexity: overrides.complexity.unwrap_or(self.limits.complexity),
+            cognitive: overrides.cognitive.unwrap_or(self.limits.cognitive),
             depth: overrides.depth.unwrap_or(self.limits.depth),
             lines: overrides.lines.unwrap_or(self.limits.lines),
             params: overrides.params.unwrap_or(self.limits.params),
@@ -275,8 +325,8 @@ mod tests {
         let path = dir.path().join("config.json");
         fs::write(&path, r#"{"limits":{"complexity":7}}"#).unwrap();
         let resolved = load_config(dir.path(), Some(&path)).unwrap();
-        assert_eq!(resolved.config.limits.complexity, 7);
-        assert_eq!(resolved.config.limits.depth, 4);
+        assert_eq!(resolved.config.limits.complexity, Some(7));
+        assert_eq!(resolved.config.limits.depth, Some(4));
     }
 
     #[test]
@@ -290,10 +340,11 @@ mod tests {
         .unwrap();
         let config = load_config(dir.path(), Some(&path)).unwrap().config;
         let limits = config.limits_for("rust");
-        assert_eq!(limits.complexity, 4);
-        assert_eq!(limits.depth, 4);
-        assert_eq!(limits.bool_ops, 3);
-        assert_eq!(limits.widget_depth, 7);
+        assert_eq!(limits.complexity, Some(4));
+        assert_eq!(limits.cognitive, Some(15));
+        assert_eq!(limits.depth, Some(4));
+        assert_eq!(limits.bool_ops, Some(3));
+        assert_eq!(limits.widget_depth, Some(7));
     }
 
     #[test]
@@ -302,13 +353,35 @@ mod tests {
         let path = dir.path().join("config.json");
         fs::write(
             &path,
-            r#"{"limits":{"bool_ops":2},"languages":{"dart":{"limits":{"widget_depth":5}}}}"#,
+            r#"{"limits":{"bool_ops":2},"languages":{"dart":{"limits":{"widget_depth":5,"cognitive":9}}}}"#,
         )
         .unwrap();
         let config = load_config(dir.path(), Some(&path)).unwrap().config;
-        assert_eq!(config.limits_for("javascript").bool_ops, 2);
-        assert_eq!(config.limits_for("dart").bool_ops, 2);
-        assert_eq!(config.limits_for("dart").widget_depth, 5);
+        assert_eq!(config.limits_for("javascript").bool_ops, Some(2));
+        assert_eq!(config.limits_for("dart").bool_ops, Some(2));
+        assert_eq!(config.limits_for("dart").widget_depth, Some(5));
+        assert_eq!(config.limits_for("dart").cognitive, Some(9));
+        assert_eq!(config.limits_for("javascript").cognitive, Some(15));
+    }
+
+    #[test]
+    fn complexity_is_off_by_default_and_null_turns_limits_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, "{}").unwrap();
+        let defaults = load_config(dir.path(), Some(&path)).unwrap().config;
+        assert_eq!(defaults.limits.complexity, None);
+        assert_eq!(defaults.limits.cognitive, Some(15));
+        fs::write(
+            &path,
+            r#"{"limits":{"complexity":15,"depth":null},"languages":{"rust":{"limits":{"complexity":null}}}}"#,
+        )
+        .unwrap();
+        let config = load_config(dir.path(), Some(&path)).unwrap().config;
+        assert_eq!(config.limits_for("go").complexity, Some(15));
+        assert_eq!(config.limits_for("go").depth, None);
+        assert_eq!(config.limits_for("rust").complexity, None);
+        assert_eq!(config.limits_for("rust").cognitive, Some(15));
     }
 
     #[test]

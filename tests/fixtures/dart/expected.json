@@ -6,158 +6,264 @@
       {
         "function": "trivial",
         "line": 1,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "atLimit",
         "line": 3,
-        "complexity": 15
+        "complexity": 15,
+        "cognitive_derivation": "14 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "overComplexity",
         "line": 21,
-        "complexity": 16
+        "complexity": 16,
+        "cognitive_derivation": "15 top-level ifs at nesting 0, +1 each"
       },
       {
         "function": "overDepth",
         "line": 40,
-        "complexity": 6
+        "complexity": 6,
+        "cognitive_derivation": "if +1; while +2; for +3; try stays at 3; if in try body +4; catch handler +4"
       },
       {
         "function": "overLines",
         "line": 53,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "straight-line code, no flow breaks"
       },
       {
         "function": "overParams",
         "line": 156,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "nested",
         "line": 158,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "the nested function is scored on its own and adds nothing here"
       },
       {
         "function": "inner",
         "line": 159,
-        "complexity": 2
+        "complexity": 2,
+        "cognitive_derivation": "conditional at nesting 0, +1"
       },
       {
         "function": "decisions",
         "line": 163,
-        "complexity": 17
+        "complexity": 17,
+        "cognitive_derivation": "if, for, for-in, while, do +1 each; switch statement +1; switch expression +1; catch +1; conditional +1; conditional +1 with || +1, && +1; ??= +1; ?? +1"
       },
       {
         "function": "Counter.increment",
         "line": 180,
-        "complexity": 2
+        "complexity": 2,
+        "cognitive_derivation": "one if or conditional at nesting 0, +1"
       },
       {
         "function": "reviewCases",
         "line": 183,
-        "complexity": 5
+        "complexity": 5,
+        "cognitive_derivation": "if +1; two else ifs +1 each; else +1; catch +1; the string and the callback add nothing"
       },
       {
         "function": "<anonymous>",
         "line": 190,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "callback with no flow breaks"
       },
       {
         "function": "commentLines",
         "line": 194,
-        "complexity": 1
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks"
       },
       {
         "function": "boolChain",
         "line": 199,
         "complexity": 4,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "a && (b || c) && d: one && run +1, the parenthesised || changes operator +1"
       },
       {
         "function": "ternaryBreak",
         "line": 201,
         "complexity": 4,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "conditional +1; a && b in the condition +1; c || d in a branch +1"
       },
       {
         "function": "ReadabilityWidgets.build",
         "line": 205,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "<anonymous>",
         "line": 214,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "callback with no flow breaks"
       },
       {
         "function": "ReadabilityWidgets.buildValueOnly",
         "line": 217,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "ReadabilityWidgets.helper",
         "line": 221,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "IgnoredValueWidget.build",
         "line": 225,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "CountedValueWidget.build",
         "line": 231,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators."
+        "derivation": "Readability-metric fixture; complexity is base 1 plus the annotated decision operators.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "nullChain",
         "line": 237,
         "complexity": 5,
         "hand_derived": true,
-        "derivation": "Base 1 plus four `??` decision operators; the four operators also form one bool_ops chain."
+        "derivation": "Base 1 plus four `??` decision operators; the four operators also form one bool_ops chain.",
+        "cognitive_derivation": "one ?? run, +1"
       },
       {
         "function": "ArrowBuilderWidget.build",
         "line": 242,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Arrow-bodied builder: Builder counts once; the padding: subtree is not a widget slot, so Ignored/Center/Text do not count."
+        "derivation": "Arrow-bodied builder: Builder counts once; the padding: subtree is not a widget slot, so Ignored/Center/Text do not count.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "<anonymous>",
         "line": 244,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Builder callback measured as its own function."
+        "derivation": "Builder callback measured as its own function.",
+        "cognitive_derivation": "callback with no flow breaks"
       },
       {
         "function": "PrivateWidget.build",
         "line": 248,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "_Card counts as a widget constructor (leading underscores trimmed); its padding: value does not."
+        "derivation": "_Card counts as a widget constructor (leading underscores trimmed); its padding: value does not.",
+        "cognitive_derivation": "widget tree with no flow breaks"
       },
       {
         "function": "ChainedWidget.build",
         "line": 255,
         "complexity": 1,
         "hand_derived": true,
-        "derivation": "Container and its Text child count; the .animate().fadeIn() chain links do not, because a call on the result of another call is not a new widget layer."
+        "derivation": "Container and its Text child count; the .animate().fadeIn() chain links do not, because a call on the result of another call is not a new widget layer.",
+        "cognitive_derivation": "widget tree with no flow breaks"
+      },
+      {
+        "function": "cognitiveAtLimit",
+        "line": 259,
+        "complexity": 9,
+        "hand_derived": true,
+        "derivation": "base 1; three loops +3; if, else if +2; && and || +2; conditional +1",
+        "cognitive_derivation": "for +1, for +2, for +3; if +4; else if +1; else +1; && then || +2; return conditional +1"
+      },
+      {
+        "function": "overCognitive",
+        "line": 273,
+        "complexity": 10,
+        "hand_derived": true,
+        "derivation": "as cognitiveAtLimit (9) plus the added operator or loop +1",
+        "cognitive_derivation": "as cognitiveAtLimit (15) plus ??= +1"
+      },
+      {
+        "function": "flatDispatch",
+        "line": 288,
+        "complexity": 5,
+        "hand_derived": true,
+        "derivation": "base 1 plus one per non-default case",
+        "cognitive_derivation": "one switch at nesting 0, +1; arms add nothing"
+      },
+      {
+        "function": "mixedSequence",
+        "line": 296,
+        "complexity": 6,
+        "hand_derived": true,
+        "derivation": "base 1 plus five short-circuit operators",
+        "cognitive_derivation": "outer && +1; parenthesised || changes operator +1; b && c inside || +1; negation ends the run so !(a && b) +1"
+      },
+      {
+        "function": "labeledJump",
+        "line": 298,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1 plus each loop and if",
+        "cognitive_derivation": "for +1; for +2; if +3; continue outer +1"
+      },
+      {
+        "function": "unbracedElseLoop",
+        "line": 307,
+        "complexity": 3,
+        "hand_derived": true,
+        "derivation": "base 1; if +1; while +1",
+        "cognitive_derivation": "if +1; else +1; the unbraced while is not an else if and sits at nesting 1, +2"
+      },
+      {
+        "function": "guardArm",
+        "line": 313,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1; case 1 +1; the guarded _ arm is not a default arm +1; && +1",
+        "cognitive_derivation": "switch expression +1; the when guard adds nothing; a && b +1"
+      },
+      {
+        "function": "handlers",
+        "line": 319,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1; two handlers +2; ?? +1",
+        "cognitive_derivation": "on StateError handler +1; on FormatException catch handler +1; ?? +1"
+      },
+      {
+        "function": "collection",
+        "line": 329,
+        "complexity": 4,
+        "hand_derived": true,
+        "derivation": "base 1; collection for +1; collection if +1; else if +1",
+        "cognitive_derivation": "collection for +1; collection if +1; else if +1; else +1"
+      },
+      {
+        "function": "cascadeElse",
+        "line": 334,
+        "complexity": 2,
+        "hand_derived": true,
+        "derivation": "base 1; collection if +1",
+        "cognitive_derivation": "collection if +1; else +1 once, although the cascade gives the alternative two children"
       }
     ]
   },
@@ -166,6 +272,7 @@
       "function": "trivial",
       "line": 1,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -176,6 +283,7 @@
       "function": "atLimit",
       "line": 3,
       "complexity": 15,
+      "cognitive": 14,
       "depth": 1,
       "lines": 17,
       "params": 1,
@@ -186,6 +294,7 @@
       "function": "overComplexity",
       "line": 21,
       "complexity": 16,
+      "cognitive": 15,
       "depth": 1,
       "lines": 18,
       "params": 1,
@@ -196,6 +305,7 @@
       "function": "overDepth",
       "line": 40,
       "complexity": 6,
+      "cognitive": 14,
       "depth": 5,
       "lines": 12,
       "params": 1,
@@ -206,6 +316,7 @@
       "function": "overLines",
       "line": 53,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 102,
       "params": 1,
@@ -216,6 +327,7 @@
       "function": "overParams",
       "line": 156,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 7,
@@ -226,6 +338,7 @@
       "function": "nested",
       "line": 158,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 4,
       "params": 1,
@@ -236,6 +349,7 @@
       "function": "inner",
       "line": 159,
       "complexity": 2,
+      "cognitive": 1,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -246,6 +360,7 @@
       "function": "decisions",
       "line": 163,
       "complexity": 17,
+      "cognitive": 14,
       "depth": 1,
       "lines": 15,
       "params": 2,
@@ -256,6 +371,7 @@
       "function": "Counter.increment",
       "line": 180,
       "complexity": 2,
+      "cognitive": 1,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -266,6 +382,7 @@
       "function": "reviewCases",
       "line": 183,
       "complexity": 5,
+      "cognitive": 5,
       "depth": 1,
       "lines": 10,
       "params": 2,
@@ -276,6 +393,7 @@
       "function": "<anonymous>",
       "line": 190,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -286,6 +404,7 @@
       "function": "commentLines",
       "line": 194,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -296,6 +415,7 @@
       "function": "boolChain",
       "line": 199,
       "complexity": 4,
+      "cognitive": 2,
       "depth": 0,
       "lines": 1,
       "params": 4,
@@ -306,6 +426,7 @@
       "function": "ternaryBreak",
       "line": 201,
       "complexity": 4,
+      "cognitive": 3,
       "depth": 0,
       "lines": 2,
       "params": 5,
@@ -316,6 +437,7 @@
       "function": "ReadabilityWidgets.build",
       "line": 205,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 11,
       "params": 1,
@@ -326,6 +448,7 @@
       "function": "<anonymous>",
       "line": 214,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -336,6 +459,7 @@
       "function": "ReadabilityWidgets.buildValueOnly",
       "line": 217,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -346,6 +470,7 @@
       "function": "ReadabilityWidgets.helper",
       "line": 221,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -356,6 +481,7 @@
       "function": "IgnoredValueWidget.build",
       "line": 225,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -366,6 +492,7 @@
       "function": "CountedValueWidget.build",
       "line": 231,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -376,6 +503,7 @@
       "function": "nullChain",
       "line": 237,
       "complexity": 5,
+      "cognitive": 1,
       "depth": 0,
       "lines": 1,
       "params": 5,
@@ -386,6 +514,7 @@
       "function": "ArrowBuilderWidget.build",
       "line": 242,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 3,
       "params": 1,
@@ -396,6 +525,7 @@
       "function": "<anonymous>",
       "line": 244,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 1,
       "params": 1,
@@ -406,6 +536,7 @@
       "function": "PrivateWidget.build",
       "line": 248,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 2,
       "params": 1,
@@ -416,11 +547,122 @@
       "function": "ChainedWidget.build",
       "line": 255,
       "complexity": 1,
+      "cognitive": 0,
       "depth": 0,
       "lines": 2,
       "params": 1,
       "bool_ops": 0,
       "widget_depth": 2
+    },
+    {
+      "function": "cognitiveAtLimit",
+      "line": 259,
+      "complexity": 9,
+      "cognitive": 15,
+      "depth": 4,
+      "lines": 13,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "overCognitive",
+      "line": 273,
+      "complexity": 10,
+      "cognitive": 16,
+      "depth": 4,
+      "lines": 14,
+      "params": 2,
+      "bool_ops": 2,
+      "widget_depth": 0
+    },
+    {
+      "function": "flatDispatch",
+      "line": 288,
+      "complexity": 5,
+      "cognitive": 1,
+      "depth": 1,
+      "lines": 7,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "mixedSequence",
+      "line": 296,
+      "complexity": 6,
+      "cognitive": 4,
+      "depth": 0,
+      "lines": 1,
+      "params": 4,
+      "bool_ops": 5,
+      "widget_depth": 0
+    },
+    {
+      "function": "labeledJump",
+      "line": 298,
+      "complexity": 4,
+      "cognitive": 7,
+      "depth": 3,
+      "lines": 8,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "unbracedElseLoop",
+      "line": 307,
+      "complexity": 3,
+      "cognitive": 4,
+      "depth": 2,
+      "lines": 5,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "guardArm",
+      "line": 313,
+      "complexity": 4,
+      "cognitive": 2,
+      "depth": 1,
+      "lines": 5,
+      "params": 3,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "handlers",
+      "line": 319,
+      "complexity": 4,
+      "cognitive": 3,
+      "depth": 1,
+      "lines": 9,
+      "params": 1,
+      "bool_ops": 1,
+      "widget_depth": 0
+    },
+    {
+      "function": "collection",
+      "line": 329,
+      "complexity": 4,
+      "cognitive": 4,
+      "depth": 0,
+      "lines": 4,
+      "params": 3,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "cascadeElse",
+      "line": 334,
+      "complexity": 2,
+      "cognitive": 2,
+      "depth": 0,
+      "lines": 1,
+      "params": 2,
+      "bool_ops": 0,
+      "widget_depth": 0
     }
   ]
 }

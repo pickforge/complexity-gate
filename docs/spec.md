@@ -379,6 +379,13 @@ gate). Existing repo overrides of `complexity` therefore turn the check back on
 for that repo and can be removed. The release notes call out the change, since
 a new default gate can fail existing code on upgrade.
 
+Measured on 32,805 functions across 19 repositories of the corpus behind issue
+#6: `complexity` 15 fails 118 functions and `cognitive` 15 fails 220. 27 stop
+failing, most of them flat dispatch, and 129 start, because they nest
+conditions that cyclomatic counting could not see. A `complexity` backstop was
+considered and dropped: at 40 it would fail only two functions that pass
+`cognitive`, and both are single boolean chains that `bool_ops` already fails.
+
 ### Function identification
 
 Functions are: function declarations, methods, constructors, getters/setters,

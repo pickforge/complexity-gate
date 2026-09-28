@@ -201,3 +201,63 @@ function boolChain(a, b, c, d) {
 function ternaryBreak(a, b, c, d, e) {
   return (a && b) ? (c || d) : e;
 }
+
+function cognitiveAtLimit(x) {
+  for (const a of x) {
+    for (const b of a) {
+      for (const c of b) {
+        if (c) x++;
+        else if (b) x--;
+        else x = a && b || c;
+      }
+    }
+  }
+  return x ? 1 : 0;
+}
+
+function overCognitive(x) {
+  for (const a of x) {
+    for (const b of a) {
+      for (const c of b) {
+        if (c) x++;
+        else if (b) x--;
+        else x = a && b || c;
+      }
+    }
+  }
+  x ??= 0;
+  return x ? 1 : 0;
+}
+
+function flatDispatch(kind) {
+  switch (kind) {
+    case 1: return "one";
+    case 2: return "two";
+    case 3: return "three";
+    case 4: return "four";
+    case 5: return "five";
+    default: return "other";
+  }
+}
+
+function mixedSequence(a, b, c, d) {
+  return (a || b && c || d) && !(a && b);
+}
+
+function labeledJump(rows) {
+  outer: for (const row of rows) {
+    for (const cell of row) {
+      if (cell) continue outer;
+    }
+  }
+}
+
+function unbracedElseLoop(x) {
+  if (x) x++;
+  else while (x < 0) x++;
+  return x;
+}
+
+function catchBinding(a, b, c) {
+  try { a(); } catch ({ x = a ? b : c }) { return x; }
+}
