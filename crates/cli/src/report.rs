@@ -127,7 +127,21 @@ fn details_hint(scope: Scope<'_>) -> String {
     match scope {
         Scope::Paths => "DETAILS pickcheck check --verbose <file>".to_owned(),
         Scope::Changed => "DETAILS pickcheck check --changed --verbose <file>".to_owned(),
-        Scope::Base(base) => format!("DETAILS pickcheck check --base {base} --verbose <file>"),
+        Scope::Base(base) => format!(
+            "DETAILS pickcheck check --base {} --verbose <file>",
+            shell_word(base)
+        ),
+    }
+}
+
+/// Git allows shell metacharacters in branch names, so a ref copied into the
+/// hint must stay one argument when the command is pasted into a shell.
+fn shell_word(value: &str) -> String {
+    let safe = |char: char| char.is_ascii_alphanumeric() || "-_./@:,+%".contains(char);
+    if !value.is_empty() && value.chars().all(safe) {
+        value.to_owned()
+    } else {
+        format!("'{}'", value.replace('\'', r"'\''"))
     }
 }
 
@@ -203,6 +217,19 @@ mod tests {
         assert!(output.contains("... 3 more files\n"));
         assert_eq!(output.matches("FAIL src/").count(), SUMMARY_PATH_LIMIT);
         assert!(output.ends_with("DETAILS pickcheck check --changed --verbose <file>\n"));
+    }
+
+    #[test]
+    fn base_hint_quotes_refs_with_shell_syntax() {
+        assert_eq!(
+            details_hint(Scope::Base("origin/main")),
+            "DETAILS pickcheck check --base origin/main --verbose <file>"
+        );
+        assert_eq!(
+            details_hint(Scope::Base("topic;echo${IFS}it's")),
+            r"DETAILS pickcheck check --base 'topic;echo${IFS}it'\''s' --verbose <file>"
+        );
+        assert_eq!(shell_word("HEAD~1"), "'HEAD~1'");
     }
 
     #[test]

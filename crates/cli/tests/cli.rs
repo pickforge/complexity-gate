@@ -241,6 +241,7 @@ fn base_covers_the_branch_since_its_fork_point() {
     let complex = "function changed(x) { if (x) return 1; return 0; }\n";
     fs::write(root.join(".pickcheck.json"), r#"{"limits":{"depth":0}}"#).unwrap();
     fs::write(root.join("working.js"), simple).unwrap();
+    fs::write(root.join("staged.js"), simple).unwrap();
     fs::write(root.join("mainline.js"), simple).unwrap();
     init_repo(root);
     commit_all(root, "initial");
@@ -252,6 +253,8 @@ fn base_covers_the_branch_since_its_fork_point() {
     commit_all(root, "mainline");
     git(root, &["checkout", "-q", "feature"]);
     fs::write(root.join("working.js"), complex).unwrap();
+    fs::write(root.join("staged.js"), complex).unwrap();
+    git(root, &["add", "staged.js"]);
     fs::write(root.join("untracked.js"), complex).unwrap();
 
     let base = command_output(root, &["check", "--base", "main"]);
@@ -262,8 +265,8 @@ fn base_covers_the_branch_since_its_fork_point() {
         "stderr: {}",
         String::from_utf8_lossy(&base.stderr)
     );
-    assert!(text.starts_with("FAIL 3 changed files, 3 functions, 3 violations\n"));
-    for expected in ["committed.js", "working.js", "untracked.js"] {
+    assert!(text.starts_with("FAIL 4 changed files, 4 functions, 4 violations\n"));
+    for expected in ["committed.js", "working.js", "staged.js", "untracked.js"] {
         assert!(
             text.contains(&format!("FAIL {expected}  ")),
             "stdout: {text}"
@@ -294,7 +297,7 @@ fn base_covers_the_branch_since_its_fork_point() {
     assert!(stacked.contains("FAIL stacked.js  "), "stdout: {stacked}");
     let whole =
         String::from_utf8(command_output(root, &["check", "--base", "main"]).stdout).unwrap();
-    assert!(whole.starts_with("FAIL 4 changed files"), "stdout: {whole}");
+    assert!(whole.starts_with("FAIL 5 changed files"), "stdout: {whole}");
 }
 
 #[test]
