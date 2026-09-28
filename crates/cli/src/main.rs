@@ -12,9 +12,9 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use pickcheck_core::{
-    ScanOptions, changed_files, coverage_unknowns, grammar_inventory, load_config, scan,
+    ScanOptions, changed_files, changed_files_since, coverage_unknowns, grammar_inventory,
+    load_config, scan,
 };
-use report::Scope;
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -50,6 +50,30 @@ enum Command {
         #[arg(long)]
         coverage: bool,
     },
+}
+
+/// What `check` measured: explicit paths, the diff against `HEAD`, or the
+/// diff against the merge base with `--base`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scope<'a> {
+    Paths,
+    Changed,
+    Base(&'a str),
+}
+
+impl Scope<'_> {
+    pub(crate) fn is_diff(self) -> bool {
+        self != Scope::Paths
+    }
+
+    /// The flag that selected a diff scope, for error messages.
+    pub(crate) fn flag(self) -> Option<&'static str> {
+        match self {
+            Scope::Paths => None,
+            Scope::Changed => Some("--changed"),
+            Scope::Base(_) => Some("--base"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -114,11 +138,12 @@ fn run_check(
     paths: &[PathBuf],
 ) -> Result<u8> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
-    let changed = scope != Scope::Paths;
     validate_output_options(scope.flag(), verbose, summary, format, paths, &cwd)?;
-    let changes = changed
-        .then(|| changed_files(&cwd, scope.base()))
-        .transpose()?;
+    let changes = match scope {
+        Scope::Paths => None,
+        Scope::Changed => Some(changed_files(&cwd)?),
+        Scope::Base(base) => Some(changed_files_since(&cwd, base)?),
+    };
     if let Some(flag) = scope.flag()
         && changes.as_ref().is_some_and(|item| item.fallback)
     {
@@ -137,7 +162,7 @@ fn run_check(
             for note in &result.notes {
                 eprintln!("note: {note}");
             }
-            let output = if summary || (changed && !verbose) {
+            let output = if summary || (scope.is_diff() && !verbose) {
                 report::summary(&result, scope)
             } else {
                 report::detailed(&result)

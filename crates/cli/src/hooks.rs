@@ -181,7 +181,7 @@ fn report_post_edit(harness: Harness, input: &HookInput, paths: &[PathBuf]) -> R
     }
     emit_feedback(
         harness,
-        &report::summary(&result, report::Scope::Paths),
+        &report::summary(&result, crate::Scope::Paths),
         false,
     )
 }
@@ -202,7 +202,7 @@ fn report_post_changed(harness: Harness, input: &HookInput) -> Result<u8> {
     }
     emit_feedback(
         harness,
-        &report::summary(&result, report::Scope::Changed),
+        &report::summary(&result, crate::Scope::Changed),
         false,
     )
 }
@@ -223,7 +223,7 @@ fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
         reset_counter(&input.session_id)?;
         return Ok(0);
     }
-    let report = report::summary(&result, report::Scope::Changed);
+    let report = report::summary(&result, crate::Scope::Changed);
     let max = load_config(&cwd, None)?.config.hook.max_blocks;
     if increment_counter(&input.session_id)? > max {
         eprintln!("UNRESOLVED\n{report}");
@@ -240,7 +240,7 @@ fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
 /// repository (or with no `HEAD`) there is nothing to diff, so hooks pass
 /// without scanning the whole tree.
 fn repo_changes(cwd: &Path) -> Result<Option<pickcheck_core::ChangedFiles>> {
-    let changes = changed_files(cwd, None)?;
+    let changes = changed_files(cwd)?;
     if changes.fallback {
         eprintln!(
             "note: hook skipped: {} is not inside a Git repository with HEAD",

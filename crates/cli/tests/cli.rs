@@ -301,6 +301,46 @@ fn base_covers_the_branch_since_its_fork_point() {
 }
 
 #[test]
+fn base_follows_renames_and_reports_only_edited_functions() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let function = |name: &str, value: usize| {
+        format!("function {name}(x) {{ if (x) return {value}; return 0; }}\n")
+    };
+    let kept = (0..8)
+        .map(|index| function(&format!("kept{index}"), 1))
+        .collect::<String>();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"depth":0}}"#).unwrap();
+    fs::write(
+        root.join("legacy.js"),
+        format!("{kept}{}", function("edited", 1)),
+    )
+    .unwrap();
+    init_repo(root);
+    git(root, &["config", "diff.renames", "false"]);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["mv", "legacy.js", "moved.js"]);
+    fs::write(
+        root.join("moved.js"),
+        format!("{kept}{}", function("edited", 2)),
+    )
+    .unwrap();
+    commit_all(root, "rename");
+
+    let output = command_output(root, &["check", "--base", "main", "--verbose", "moved.js"]);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(text.contains("FAIL moved.js:9 edited"), "stdout: {text}");
+    assert!(!text.contains("kept"), "stdout: {text}");
+}
+
+#[test]
 fn base_rejects_unknown_refs_options_and_unrelated_history() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

@@ -2,34 +2,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pickcheck_core::{ScanResult, Violation};
 
+use crate::Scope;
+
 const SUMMARY_PATH_LIMIT: usize = 20;
-
-/// What `check` measured: explicit paths, the diff against `HEAD`, or the
-/// diff against the merge base with `--base`.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Scope<'a> {
-    Paths,
-    Changed,
-    Base(&'a str),
-}
-
-impl<'a> Scope<'a> {
-    /// The flag that selected a diff scope, for error messages.
-    pub(crate) fn flag(self) -> Option<&'static str> {
-        match self {
-            Scope::Paths => None,
-            Scope::Changed => Some("--changed"),
-            Scope::Base(_) => Some("--base"),
-        }
-    }
-
-    pub(crate) fn base(self) -> Option<&'a str> {
-        match self {
-            Scope::Base(base) => Some(base),
-            Scope::Paths | Scope::Changed => None,
-        }
-    }
-}
 
 #[derive(Default)]
 struct FileFailures {
@@ -57,7 +32,7 @@ pub(crate) fn detailed(result: &ScanResult) -> String {
 }
 
 pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
-    let changed = scope != Scope::Paths;
+    let changed = scope.is_diff();
     let failures = group_failures(&result.violations);
     let mut output = Vec::new();
     if !failures.is_empty() {

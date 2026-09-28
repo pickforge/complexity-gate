@@ -36,9 +36,18 @@ pub struct ChangedFiles {
     pub fallback: bool,
 }
 
-/// Diffs the working tree against `HEAD`, or with `base` against the commit
-/// where `HEAD` forked from it, the same range a pull request shows.
-pub fn changed_files(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
+/// Diffs the working tree against `HEAD`.
+pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
+    collect_changes(cwd, None)
+}
+
+/// Diffs the working tree against the commit where `HEAD` forked from `base`,
+/// the same range a pull request shows.
+pub fn changed_files_since(cwd: &Path, base: &str) -> Result<ChangedFiles> {
+    collect_changes(cwd, Some(base))
+}
+
+fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
     let Some(repo_root) = repository_root(cwd)? else {
         return Ok(ChangedFiles {
             repo_root: cwd.to_path_buf(),
@@ -73,6 +82,7 @@ pub fn changed_files(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
             "--no-ext-diff",
             "--no-textconv",
             "--no-color",
+            "--find-renames",
             "--unified=0",
         ])
         .args([from.as_str(), "--"])

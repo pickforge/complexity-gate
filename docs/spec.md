@@ -499,9 +499,10 @@ pickcheck --version
   `ignore` applies before any language lookup, so ignored paths never appear as
   `UNVERIFIED`. Explicit paths are normalized (`.`/`..`) before intersecting.
   Non-UTF-8 diff output is decoded lossily; hunk headers are ASCII. Git is invoked with
-  `--no-ext-diff --no-textconv`, external diff, textconv, fsmonitor, and hooks
+  `--no-ext-diff --no-textconv --find-renames`, external diff, textconv, fsmonitor, and hooks
   disabled, and `GIT_DIR`/`GIT_WORK_TREE`/`GIT_EXTERNAL_DIFF`/`GIT_CONFIG_*`
-  removed from its environment.
+  removed from its environment. Rename detection is explicit so a renamed file
+  reports only the functions its edits touch, whatever `diff.renames` says.
 - With `--base <ref>`: the same as `--changed`, which it implies, but the diff
   starts at the merge base of `<ref>` and `HEAD` instead of `HEAD`, so branch
   commits count together with staged, unstaged, and untracked work. This is the
@@ -511,7 +512,8 @@ pickcheck --version
   and the resulting commit replaces `HEAD` in `git diff`. A ref starting with
   `-`, a ref that names no commit, or no merge base (for example in a shallow
   clone) exits 2 with a short error and does not scan; it never falls back to
-  `HEAD`. Hooks always diff against `HEAD`.
+  `HEAD`. When a criss-cross history has several merge bases, Git's choice is
+  used. Hooks always diff against `HEAD`.
 - `--changed` and explicit `paths` together: intersection (changed functions within
   those paths).
 - Text output for explicit paths is detailed by default, one line per violation,
