@@ -36,7 +36,9 @@ pub struct ChangedFiles {
     pub fallback: bool,
 }
 
-pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
+/// Diffs the working tree against `HEAD`, or with `base` against the commit
+/// where `HEAD` forked from it, the same range a pull request shows.
+pub fn changed_files(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
     let Some(repo_root) = repository_root(cwd)? else {
         return Ok(ChangedFiles {
             repo_root: cwd.to_path_buf(),
@@ -51,6 +53,10 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
             ..ChangedFiles::default()
         });
     }
+    let from = match base {
+        Some(base) => merge_base(&repo_root, base)?,
+        None => "HEAD".to_owned(),
+    };
     let output = git_command(&repo_root)
         .args([
             "-c",
@@ -68,9 +74,8 @@ pub fn changed_files(cwd: &Path) -> Result<ChangedFiles> {
             "--no-textconv",
             "--no-color",
             "--unified=0",
-            "HEAD",
-            "--",
         ])
+        .args([from.as_str(), "--"])
         .output()
         .context("failed to execute git diff")?;
     if !output.status.success() {
@@ -99,6 +104,37 @@ pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
     }
     let root = String::from_utf8(output.stdout).context("Git repository root was not UTF-8")?;
     Ok(Some(PathBuf::from(root.trim())))
+}
+
+fn merge_base(repo_root: &Path, base: &str) -> Result<String> {
+    // A leading dash would reach Git as an option instead of a revision.
+    if base.starts_with('-') {
+        bail!("--base {base} is not a Git ref");
+    }
+    let commit = git_line(
+        repo_root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{base}^{{commit}}"),
+        ],
+    )?
+    .with_context(|| format!("--base {base} does not name a commit"))?;
+    git_line(repo_root, &["merge-base", &commit, "HEAD"])?
+        .with_context(|| format!("--base {base} has no merge base with HEAD; fetch more history"))
+}
+
+/// Trimmed stdout of a Git command, or `None` when Git exits nonzero.
+fn git_line(cwd: &Path, args: &[&str]) -> Result<Option<String>> {
+    let output = git_command(cwd)
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to execute git {}", args[0]))?;
+    Ok(output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
 }
 
 fn git_ok(cwd: &Path, args: &[&str]) -> bool {

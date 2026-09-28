@@ -14,6 +14,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use pickcheck_core::{
     ScanOptions, changed_files, coverage_unknowns, grammar_inventory, load_config, scan,
 };
+use report::Scope;
 use serde::Serialize;
 
 #[derive(Parser)]
@@ -28,6 +29,8 @@ enum Command {
     Check {
         #[arg(long)]
         changed: bool,
+        #[arg(long, value_name = "REF")]
+        base: Option<String>,
         #[arg(long, conflicts_with = "summary")]
         verbose: bool,
         #[arg(long, conflicts_with = "verbose")]
@@ -77,12 +80,20 @@ fn run(cli: Cli) -> Result<u8> {
     match cli.command {
         Command::Check {
             changed,
+            base,
             verbose,
             summary,
             format,
             config,
             paths,
-        } => run_check(changed, verbose, summary, format, config.as_deref(), &paths),
+        } => {
+            let scope = match (changed, base.as_deref()) {
+                (_, Some(base)) => Scope::Base(base),
+                (true, None) => Scope::Changed,
+                (false, None) => Scope::Paths,
+            };
+            run_check(scope, verbose, summary, format, config.as_deref(), &paths)
+        }
         Command::Hook { harness } => hooks::run(match harness {
             Harness::Claude => hooks::Harness::Claude,
             Harness::Codex => hooks::Harness::Codex,
@@ -95,7 +106,7 @@ fn run(cli: Cli) -> Result<u8> {
 }
 
 fn run_check(
-    changed: bool,
+    scope: Scope<'_>,
     verbose: bool,
     summary: bool,
     format: Format,
@@ -103,8 +114,11 @@ fn run_check(
     paths: &[PathBuf],
 ) -> Result<u8> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
+    let changed = scope != Scope::Paths;
     validate_output_options(changed, verbose, summary, format, paths, &cwd)?;
-    let changes = changed.then(|| changed_files(&cwd)).transpose()?;
+    let changes = changed
+        .then(|| changed_files(&cwd, scope.base()))
+        .transpose()?;
     if changes.as_ref().is_some_and(|item| item.fallback) {
         anyhow::bail!(
             "--changed requires a Git repository with HEAD; run from a repository or omit --changed"
@@ -122,7 +136,7 @@ fn run_check(
                 eprintln!("note: {note}");
             }
             let output = if summary || (changed && !verbose) {
-                report::summary(&result, changed)
+                report::summary(&result, scope)
             } else {
                 report::detailed(&result)
             };

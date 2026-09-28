@@ -55,6 +55,7 @@ cargo install --git https://github.com/pickforge/pickcheck --package pickcheck -
 pickcheck check src                             # check a directory
 pickcheck check --changed                       # only functions touched by the Git diff
 pickcheck check --changed --verbose src/auth.ts # details for one failing file
+pickcheck check --base origin/main              # everything since the branch forked
 pickcheck check --format json .                 # machine-readable report
 pickcheck doctor --coverage                     # config chain, grammars, unclassified syntax
 ```
@@ -62,7 +63,9 @@ pickcheck doctor --coverage                     # config chain, grammars, unclas
 `check` exits 0 when clean, 1 for violations, and 2 for usage/runtime errors.
 Unsupported extensions are reported as `UNVERIFIED` without failing.
 `--changed` prints a summary capped at 20 paths and never scans outside a Git
-repository with `HEAD`. Use its `DETAILS` command to inspect one failing file.
+repository with `HEAD`. `--base <ref>` widens the diff to start where the
+branch forked from `<ref>`, like a pull request. Use the `DETAILS` command to
+inspect one failing file.
 Explicit paths remain detailed by default; `--summary` makes them compact.
 
 ### Hooks

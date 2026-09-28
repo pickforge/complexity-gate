@@ -4,6 +4,24 @@ use pickcheck_core::{ScanResult, Violation};
 
 const SUMMARY_PATH_LIMIT: usize = 20;
 
+/// What `check` measured: explicit paths, the diff against `HEAD`, or the
+/// diff against the merge base with `--base`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scope<'a> {
+    Paths,
+    Changed,
+    Base(&'a str),
+}
+
+impl<'a> Scope<'a> {
+    pub(crate) fn base(self) -> Option<&'a str> {
+        match self {
+            Scope::Base(base) => Some(base),
+            Scope::Paths | Scope::Changed => None,
+        }
+    }
+}
+
 #[derive(Default)]
 struct FileFailures {
     functions: BTreeSet<(usize, String)>,
@@ -29,7 +47,8 @@ pub(crate) fn detailed(result: &ScanResult) -> String {
     lines(violations.chain(unverified))
 }
 
-pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
+pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
+    let changed = scope != Scope::Paths;
     let failures = group_failures(&result.violations);
     let mut output = Vec::new();
     if !failures.is_empty() {
@@ -40,7 +59,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!(
             "FAIL {} {}, {} {}, {} {}",
             failures.len(),
-            scope("file", failures.len(), changed),
+            scoped_noun("file", failures.len(), changed),
             function_count,
             plural("function", function_count),
             result.violations.len(),
@@ -51,7 +70,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!(
             "UNVERIFIED {} {}",
             result.unverified.len(),
-            scope("file", result.unverified.len(), changed)
+            scoped_noun("file", result.unverified.len(), changed)
         ));
     }
 
@@ -87,7 +106,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!("... {} more files", total - shown));
     }
     if total > 0 {
-        output.push(details_hint(changed).to_owned());
+        output.push(details_hint(scope));
     }
     lines(output)
 }
@@ -104,15 +123,15 @@ fn group_failures(violations: &[Violation]) -> BTreeMap<&std::path::Path, FileFa
     files
 }
 
-fn details_hint(changed: bool) -> &'static str {
-    if changed {
-        "DETAILS pickcheck check --changed --verbose <file>"
-    } else {
-        "DETAILS pickcheck check --verbose <file>"
+fn details_hint(scope: Scope<'_>) -> String {
+    match scope {
+        Scope::Paths => "DETAILS pickcheck check --verbose <file>".to_owned(),
+        Scope::Changed => "DETAILS pickcheck check --changed --verbose <file>".to_owned(),
+        Scope::Base(base) => format!("DETAILS pickcheck check --base {base} --verbose <file>"),
     }
 }
 
-fn scope(noun: &'static str, count: usize, changed: bool) -> String {
+fn scoped_noun(noun: &'static str, count: usize, changed: bool) -> String {
     let noun = plural(noun, count);
     if changed {
         format!("changed {noun}")
@@ -176,7 +195,7 @@ mod tests {
             reason: "no grammar for .kt".to_owned(),
         });
 
-        let output = summary(&result, true);
+        let output = summary(&result, Scope::Changed);
 
         assert!(output.starts_with("FAIL 22 changed files, 22 functions, 23 violations\n"));
         assert!(output.contains("UNVERIFIED 1 changed file\n"));
@@ -189,7 +208,7 @@ mod tests {
     #[test]
     fn empty_reports_are_silent() {
         let result = ScanResult::default();
-        assert!(summary(&result, true).is_empty());
+        assert!(summary(&result, Scope::Changed).is_empty());
         assert!(detailed(&result).is_empty());
     }
 }
