@@ -315,6 +315,7 @@ fn base_rejects_unknown_refs_options_and_unrelated_history() {
         ("missing", "--base missing does not name a commit"),
         ("--output=leak", "--base --output=leak is not a Git ref"),
         ("unrelated", "--base unrelated has no merge base with HEAD"),
+        ("", "--base needs a Git ref"),
     ] {
         let output = command_output(root, &["check", &format!("--base={base}")]);
         assert_eq!(output.status.code(), Some(2), "base {base}");
@@ -323,6 +324,19 @@ fn base_rejects_unknown_refs_options_and_unrelated_history() {
         assert!(stderr.contains(error), "base {base}; stderr: {stderr}");
     }
     assert!(!root.join("leak").exists());
+
+    let verbose = command_output(root, &["check", "--base", "main", "--verbose"]);
+    assert_eq!(verbose.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&verbose.stderr)
+            .contains("--base --verbose requires at least one explicit file")
+    );
+    let outside = tempfile::tempdir().unwrap();
+    let output = command_output(outside.path(), &["check", "--base", "main"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "--base requires a Git repository with HEAD; run from a repository or omit --base"
+    ));
 }
 
 #[test]

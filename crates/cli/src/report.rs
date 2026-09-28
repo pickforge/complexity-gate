@@ -14,6 +14,15 @@ pub(crate) enum Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
+    /// The flag that selected a diff scope, for error messages.
+    pub(crate) fn flag(self) -> Option<&'static str> {
+        match self {
+            Scope::Paths => None,
+            Scope::Changed => Some("--changed"),
+            Scope::Base(_) => Some("--base"),
+        }
+    }
+
     pub(crate) fn base(self) -> Option<&'a str> {
         match self {
             Scope::Base(base) => Some(base),

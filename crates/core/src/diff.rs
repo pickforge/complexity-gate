@@ -108,6 +108,9 @@ pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
 
 fn merge_base(repo_root: &Path, base: &str) -> Result<String> {
     // A leading dash would reach Git as an option instead of a revision.
+    if base.is_empty() {
+        bail!("--base needs a Git ref");
+    }
     if base.starts_with('-') {
         bail!("--base {base} is not a Git ref");
     }

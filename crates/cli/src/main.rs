@@ -115,13 +115,15 @@ fn run_check(
 ) -> Result<u8> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
     let changed = scope != Scope::Paths;
-    validate_output_options(changed, verbose, summary, format, paths, &cwd)?;
+    validate_output_options(scope.flag(), verbose, summary, format, paths, &cwd)?;
     let changes = changed
         .then(|| changed_files(&cwd, scope.base()))
         .transpose()?;
-    if changes.as_ref().is_some_and(|item| item.fallback) {
+    if let Some(flag) = scope.flag()
+        && changes.as_ref().is_some_and(|item| item.fallback)
+    {
         anyhow::bail!(
-            "--changed requires a Git repository with HEAD; run from a repository or omit --changed"
+            "{flag} requires a Git repository with HEAD; run from a repository or omit {flag}"
         );
     }
     let result = scan(&ScanOptions {
@@ -148,7 +150,7 @@ fn run_check(
 }
 
 fn validate_output_options(
-    changed: bool,
+    diff_flag: Option<&str>,
     verbose: bool,
     summary: bool,
     format: Format,
@@ -158,11 +160,14 @@ fn validate_output_options(
     if format == Format::Json && (verbose || summary) {
         anyhow::bail!("--verbose and --summary cannot be used with --format json");
     }
-    if changed && verbose && paths.is_empty() {
-        anyhow::bail!("--changed --verbose requires at least one explicit file");
+    let Some(flag) = diff_flag.filter(|_| verbose) else {
+        return Ok(());
+    };
+    if paths.is_empty() {
+        anyhow::bail!("{flag} --verbose requires at least one explicit file");
     }
-    if changed && verbose && paths.iter().any(|path| cwd.join(path).is_dir()) {
-        anyhow::bail!("--changed --verbose accepts files, not directories");
+    if paths.iter().any(|path| cwd.join(path).is_dir()) {
+        anyhow::bail!("{flag} --verbose accepts files, not directories");
     }
     Ok(())
 }
