@@ -33,7 +33,7 @@ underlying problem is real.
 
 | Metric | Definition | Default limit |
 |---|---|---|
-| `complexity` | cyclomatic: `1 + decision points` in the function body, excluding nested functions | 15, a backstop once `cognitive` ships (see Cognitive complexity) |
+| `complexity` | cyclomatic: `1 + decision points` in the function body, excluding nested functions | off (`null`); see Cognitive complexity |
 | `cognitive` | cognitive complexity: flow breaks weighted by nesting (see below) | 15 |
 | `depth` | max nesting of control-flow constructs (see below), nested functions reset to 0 | 4 |
 | `lines` | lines from the function's first to last line inclusive, minus blank lines and comment-only lines (every non-whitespace byte inside comment nodes); nested functions included | 100 |
@@ -41,7 +41,7 @@ underlying problem is real.
 | `bool_ops` | max short-circuit boolean operators in a single expression (see below) | 3 |
 | `widget_depth` | Dart only: max nesting of widget constructors in a `build` method (see below) | 7 |
 
-A violation is `value > limit`. Test files (see config) are exempt from `lines`
+A violation is `value > limit`. A `null` limit turns that metric's check off. Test files (see config) are exempt from `lines`
 only.
 
 ### Decision points (common rules)
@@ -310,7 +310,7 @@ independently of the script rules:
 | structural | `if_statement`, `each_statement`, `await_statement` |
 | nesting | every child of those statements other than the start tag sits one level deeper; inside `else_if_block` and `else_block`, the `else_if_start` / `else_start` tag and its `condition` stay at the statement's level and the block's other children sit one level deeper, like the statement's own body |
 | else if / else | `else_if_block` / `else_block`, flat 1 each, in both `{#if}` and `{#each}` |
-| adds 0 | `then_block`, `catch_block`, `key_statement`, `snippet_statement`, which also leave nesting alone |
+| adds 0 | `then_block`, `catch_block`, `key_statement`, which also leave nesting alone |
 
 An `{#await}` block is one structural increment for all its branches, like a
 `switch` over the promise's states. The `{#each}` grammar puts the content
@@ -331,10 +331,15 @@ JavaScript rules at the nesting level of its enclosing block, so an `{#if}`
 condition sits at the block's own level and an expression in its body one level
 deeper. Nodes inside an `ERROR` subtree add nothing, so an `{#await p then v}`
 text that does not parse as an expression scores 0. Functions inside template
-expressions are not reported on their own, so their bodies count toward
-`<template>` at that same level instead of being excluded. These rules score
-whatever unit the template is measured as, so a change to template scoping
-(issue #8) does not change them.
+expressions are not reported on their own, so their bodies count toward the
+enclosing template unit at that same level instead of being excluded.
+
+Each template unit (see Svelte) is scored on its own from nesting 0. A
+top-level block unit's own `{#if}`, `{#each}`, or `{#await}` is a structural
+increment at nesting 0. A `{#snippet}` unit's contents start at nesting 0, and
+a snippet inside another unit adds nothing to that unit, like a nested
+function. The root `<template>` unit scores the expressions outside every other
+unit.
 
 #### Deviations from the white paper
 
@@ -343,7 +348,7 @@ enclosing function; the paper nests lambdas into their parent. Keeping every
 metric on the same function boundary matters more here than matching the paper,
 and callback-heavy code would otherwise be charged twice. The one exception is
 a function inside a Svelte template expression, which is never reported on its
-own and so counts toward `<template>` without raising nesting.
+own and so counts toward its template unit without raising nesting.
 
 Recursion is not counted. The paper adds 1 per method in a recursion cycle,
 which needs call resolution. A single-file syntactic pass cannot tell a
@@ -363,17 +368,16 @@ clauses; Go `select` and `goto`; and Svelte template blocks.
 #### Limits and rollout
 
 `cognitive` defaults to 15 and applies to every language, including Svelte
-`<template>`, and to test files. It is configured like every other metric
+template units, and to test files. It is configured like every other metric
 (`limits.cognitive`, `languages.<name>.limits.cognitive`), reported with
 `metric` set to `cognitive`, and leaves the JSON shape and exit codes unchanged.
 
-Once `cognitive` ships, `complexity` stops being the primary measure and
-becomes a backstop for sheer path count. Its default rises in the same release
-to a value calibrated on the corpus behind issue #6, chosen so that flat
-dispatch (a 30-arm `switch`, a large Rust `match` on an enum) passes; the
-calibrated value replaces 15 in the metrics table. Repo overrides of
-`complexity` keep working and can be removed. The release notes call out the
-recalibration, since a new default limit can fail existing repos on upgrade.
+`cognitive` replaces `complexity` as the default gate. `complexity` is still
+measured, but its default limit is `null`, so it fails nothing unless a user or
+repo config sets a number (`"limits": {"complexity": 15}` restores the old
+gate). Existing repo overrides of `complexity` therefore turn the check back on
+for that repo and can be removed. The release notes call out the change, since
+a new default gate can fail existing code on upgrade.
 
 ### Function identification
 
@@ -439,9 +443,8 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 ### Per-language notes (record any others found during implementation here)
 
 - Rust: `match` arms count individually for `complexity` (a 20-arm `match` on an
-  enum is 20). `cognitive` scores the same `match` 1, which is what lets
-  `complexity` act as a backstop instead of needing repo overrides for large
-  dispatch matches.
+  enum is 20). `cognitive` scores the same `match` 1, and `complexity` is off
+  by default, so large dispatch matches no longer need repo overrides.
 - Go: no ternary; `switch` with no tag counts each `case`; `select` counts each
   `case`.
 - Python: `match` `case` arms count; `case _` does not. Comprehension `for` and
@@ -623,7 +626,7 @@ Resolution, later wins, shallow merge per top-level key:
 
 ```json
 {
-  "limits": { "complexity": 15, "cognitive": 15, "depth": 4, "lines": 100, "params": 6,
+  "limits": { "complexity": null, "cognitive": 15, "depth": 4, "lines": 100, "params": 6,
               "bool_ops": 3, "widget_depth": 7 },
   "tests": {
     "patterns": ["**/*.test.*", "**/*.spec.*", "**/*_test.go", "**/test_*.py",
@@ -648,7 +651,9 @@ A repo config is trusted like any repo file. Under `--changed`, when a
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
-with the key named.
+with the key named. Any limit, global or per language, accepts `null` to turn
+that check off; a later layer can turn it back on with a number, and a language
+override of `null` turns it off for that language only.
 
 ## State
 
