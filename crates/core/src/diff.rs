@@ -38,7 +38,20 @@ pub struct ChangedFiles {
     /// Every tracked path the diff lists, old and new, including deletions,
     /// pure renames, and empty files that have no hunks.
     pub touched: Vec<PathBuf>,
+    /// The merge-base commit with `--base`, resolved once for the diff and
+    /// every base read.
+    pub base: Option<String>,
     pub fallback: bool,
+}
+
+/// A file's content at the merge base.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BaseBlob {
+    /// The base commit has no file at that path.
+    Missing,
+    /// The path exists but is not a readable file.
+    Unreadable,
+    Content(Vec<u8>),
 }
 
 /// Diffs the working tree against `HEAD`.
@@ -67,10 +80,8 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
             ..ChangedFiles::default()
         });
     }
-    let from = match base {
-        Some(base) => merge_base(&repo_root, base)?,
-        None => "HEAD".to_owned(),
-    };
+    let base = base.map(|base| merge_base(&repo_root, base)).transpose()?;
+    let from = base.clone().unwrap_or_else(|| "HEAD".to_owned());
     let hunks = git_diff(&repo_root, &from, &["--unified=0"])?;
     // Name-status lists deletions, pure renames, and empty files, which have
     // no hunks, and it never quotes paths.
@@ -81,9 +92,46 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
         untracked: untracked(&repo_root)?,
         renames,
         touched,
+        base,
         repo_root,
         fallback: false,
     })
+}
+
+/// Reads `path`, relative to the repository root, at `commit` without
+/// textconv or filters. Only an entry that `ls-tree` does not list is
+/// missing; every Git failure makes the base unreadable.
+pub fn base_blob(repo_root: &Path, commit: &str, path: &Path) -> BaseBlob {
+    let path = path.to_string_lossy();
+    let listing = match git_command(repo_root)
+        .env("GIT_LITERAL_PATHSPECS", "1")
+        .args(["ls-tree", "-z", commit, "--", path.as_ref()])
+        .output()
+    {
+        Ok(output) if output.status.success() => output.stdout,
+        _ => return BaseBlob::Unreadable,
+    };
+    let listing = String::from_utf8_lossy(&listing);
+    let Some(meta) = listing.split('\0').find_map(|entry| {
+        entry
+            .split_once('\t')
+            .filter(|(_, name)| *name == path)
+            .map(|(meta, _)| meta)
+    }) else {
+        return BaseBlob::Missing;
+    };
+    // `<mode> <type> <object>`
+    let mut fields = meta.split(' ').skip(1);
+    let (Some("blob"), Some(object)) = (fields.next(), fields.next()) else {
+        return BaseBlob::Unreadable;
+    };
+    match git_command(repo_root)
+        .args(["cat-file", "blob", object])
+        .output()
+    {
+        Ok(output) if output.status.success() => BaseBlob::Content(output.stdout),
+        _ => BaseBlob::Unreadable,
+    }
 }
 
 fn git_diff(repo_root: &Path, from: &str, format: &[&str]) -> Result<String> {

@@ -30,6 +30,23 @@ pub struct FunctionMetrics {
     pub params: usize,
     pub bool_ops: usize,
     pub widget_depth: usize,
+    /// Byte range in the file, so containment gives a closure's enclosing
+    /// function even when both start on the same line.
+    #[serde(skip)]
+    pub span: (usize, usize),
+    /// A Svelte template unit, which `lines` and `params` do not apply to.
+    #[serde(skip)]
+    pub template: bool,
+    /// A Dart `build` method, the only unit `widget_depth` applies to.
+    #[serde(skip)]
+    pub widget: bool,
+}
+
+/// Where a parsed fragment starts in its file.
+#[derive(Clone, Copy, Default)]
+struct Offset {
+    line: usize,
+    byte: usize,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -279,13 +296,13 @@ pub fn parse_source(language: Language, source: &str) -> Result<Vec<FunctionMetr
     if language == Language::Svelte {
         return parse_svelte(source);
     }
-    parse_with_offset(language, source, 0)
+    parse_with_offset(language, source, Offset::default())
 }
 
 fn parse_with_offset(
     language: Language,
     source: &str,
-    line_offset: usize,
+    offset: Offset,
 ) -> Result<Vec<FunctionMetrics>> {
     let mut parser = Parser::new();
     parser
@@ -295,13 +312,7 @@ fn parse_with_offset(
         .parse(source, None)
         .context("tree-sitter parser returned no tree")?;
     let mut functions = Vec::new();
-    collect_functions(
-        tree.root_node(),
-        language,
-        source,
-        line_offset,
-        &mut functions,
-    );
+    collect_functions(tree.root_node(), language, source, offset, &mut functions);
     functions.sort_by_key(|item| (item.line, item.end_line));
     Ok(functions)
 }
@@ -310,7 +321,7 @@ fn collect_functions(
     node: Node<'_>,
     language: Language,
     source: &str,
-    offset: usize,
+    offset: Offset,
     output: &mut Vec<FunctionMetrics>,
 ) {
     if is_function(language, node.kind()) {
@@ -326,7 +337,7 @@ fn measure_function(
     node: Node<'_>,
     language: Language,
     source: &str,
-    offset: usize,
+    offset: Offset,
 ) -> FunctionMetrics {
     let mut score = Score {
         complexity: 1,
@@ -337,17 +348,24 @@ fn measure_function(
     measure_node(body, node.id(), language, source, 0, &mut score);
     let start = node.start_position().row + 1;
     let end = node.end_position().row + 1;
+    let widget_depth = measure_widget_depth(node, language, source);
     FunctionMetrics {
         function: function_name(node, language, source),
-        line: start + offset,
-        end_line: end + offset,
+        line: start + offset.line,
+        end_line: end + offset.line,
         complexity: score.complexity,
         cognitive: cognitive::measure_function(node, language, source),
         depth: score.depth,
         lines: significant_lines(source, start, end, node),
         params: parameter_count(node, language, source),
         bool_ops: score.bool_ops,
-        widget_depth: measure_widget_depth(node, language, source),
+        widget_depth: widget_depth.unwrap_or(0),
+        span: (
+            node.start_byte() + offset.byte,
+            node.end_byte() + offset.byte,
+        ),
+        template: false,
+        widget: widget_depth.is_some(),
     }
 }
 
@@ -446,15 +464,16 @@ fn is_boolean_operator(node: Node<'_>, language: Language, source: &str) -> bool
     }
 }
 
-fn measure_widget_depth(node: Node<'_>, language: Language, source: &str) -> usize {
+/// `None` when the unit is not a Dart `build` method.
+fn measure_widget_depth(node: Node<'_>, language: Language, source: &str) -> Option<usize> {
     if language != Language::Dart
         || node.kind() != "method_declaration"
         || direct_name(node, source) != Some("build")
     {
-        return 0;
+        return None;
     }
     let body = node.child_by_field_name("body").unwrap_or(node);
-    widget_depth_in_node(body, node.id(), source, 0, false)
+    Some(widget_depth_in_node(body, node.id(), source, 0, false))
 }
 
 fn widget_depth_in_node(
@@ -1087,7 +1106,10 @@ fn parse_svelte(source: &str) -> Result<Vec<FunctionMetrics>> {
         functions.extend(parse_with_offset(
             language,
             block.content,
-            block.start_line,
+            Offset {
+                line: block.start_line,
+                byte: block.start_byte,
+            },
         )?);
     }
     functions.extend(measure_template(
@@ -1114,6 +1136,7 @@ struct SvelteBlock<'a> {
     opening: &'a str,
     content: &'a str,
     start_line: usize,
+    start_byte: usize,
 }
 
 fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
@@ -1138,6 +1161,7 @@ fn svelte_blocks(source: &str) -> Vec<SvelteBlock<'_>> {
                     .bytes()
                     .filter(|byte| *byte == b'\n')
                     .count(),
+                start_byte: open_end,
             });
             cursor = end + kind.len() + 3;
         }
@@ -1165,8 +1189,9 @@ fn measure_template(root: Node<'_>, source: &str, script: Language) -> Vec<Funct
         bool_ops: 0,
     };
     score_svelte_node(root, source, 0, true, &mut score, &mut units);
-    let end_line = source.lines().count().max(1);
-    let mut unit = template_metrics("<template>".to_owned(), 1, end_line, &score);
+    let mut unit = template_metrics("<template>".to_owned(), root, &score);
+    unit.line = 1;
+    unit.end_line = source.lines().count().max(1);
     unit.cognitive = cognitive::measure_template_unit(root, source, script, true);
     units.list.push(unit);
     units.list
@@ -1205,12 +1230,7 @@ fn measure_template_unit(
         bool_ops: 0,
     };
     score_svelte_node(node, source, 0, false, &mut score, units);
-    let mut unit = template_metrics(
-        template_unit_name(node, source),
-        node.start_position().row + 1,
-        node.end_position().row + 1,
-        &score,
-    );
+    let mut unit = template_metrics(template_unit_name(node, source), node, &score);
     unit.cognitive = cognitive::measure_template_unit(node, source, units.script, false);
     unit
 }
@@ -1235,16 +1255,11 @@ fn template_unit_name(node: Node<'_>, source: &str) -> String {
     }
 }
 
-fn template_metrics(
-    function: String,
-    line: usize,
-    end_line: usize,
-    score: &Score,
-) -> FunctionMetrics {
+fn template_metrics(function: String, node: Node<'_>, score: &Score) -> FunctionMetrics {
     FunctionMetrics {
         function,
-        line,
-        end_line,
+        line: node.start_position().row + 1,
+        end_line: node.end_position().row + 1,
         complexity: score.complexity,
         cognitive: 0,
         depth: score.depth,
@@ -1252,6 +1267,9 @@ fn template_metrics(
         params: 0,
         bool_ops: score.bool_ops,
         widget_depth: 0,
+        span: (node.start_byte(), node.end_byte()),
+        template: true,
+        widget: false,
     }
 }
 
@@ -1284,7 +1302,7 @@ fn score_svelte_node(
 
 fn expression_bool_ops(expression: &str) -> usize {
     let wrapped = format!("function expression() {{ return ({expression}); }}");
-    parse_with_offset(Language::JavaScript, &wrapped, 0)
+    parse_with_offset(Language::JavaScript, &wrapped, Offset::default())
         .ok()
         .and_then(|functions| functions.first().map(|function| function.bool_ops))
         .unwrap_or(0)

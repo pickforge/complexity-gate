@@ -9,8 +9,10 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 
 use crate::{
-    ChangedFiles, Config, FunctionMetrics, Language, LineRange, diff::repository_root, load_config,
-    parse_source,
+    BaseBlob, ChangedFiles, Config, FunctionMetrics, Language, Limits, LineRange, base_blob,
+    baseline::{self, MetricValues, Pairing, Status},
+    diff::repository_root,
+    load_config, parse_source,
 };
 
 const UNVERIFIED_SOURCE_EXTENSIONS: &[&str] = &[
@@ -26,6 +28,19 @@ pub struct Violation {
     pub metric: String,
     pub value: usize,
     pub limit: usize,
+    /// Present only with `--base`.
+    #[serde(flatten)]
+    pub baseline: Option<Baseline>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct Baseline {
+    pub status: Status,
+    /// `None` for `new` and `unmatched`.
+    pub base_metrics: Option<MetricValues>,
+    /// Effective limits for this function, `None` where a check is off or
+    /// does not apply.
+    pub limits: Limits,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -53,6 +68,15 @@ pub struct ScanOptions<'a> {
 struct ScanFile {
     path: PathBuf,
     explicit: bool,
+}
+
+/// One scanned source file and what decides its violations.
+struct FileContext<'a> {
+    display: &'a Path,
+    matched: &'a Path,
+    language: Language,
+    config: &'a Config,
+    test_file: bool,
 }
 
 pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
@@ -249,17 +273,124 @@ fn scan_file(
         }
     };
     let functions = parse_source(language, &source)?;
-    let test_file = Config::matcher(&config.tests.patterns)?.is_match(&matched_path);
+    let context = FileContext {
+        display: &display,
+        matched: &matched_path,
+        language,
+        config: &config,
+        test_file: Config::matcher(&config.tests.patterns)?.is_match(&matched_path),
+    };
     let spans = changed_spans(&matched_path, options.changed);
-    for function in functions {
-        if spans.is_some_and(|ranges| !touches(&function, ranges)) {
+    let first = result.violations.len();
+    let mut units_of = Vec::new();
+    for (index, function) in functions.iter().enumerate() {
+        if spans.is_some_and(|ranges| !touches(function, ranges)) {
             continue;
         }
         result.checked += 1;
-        add_violations(&display, &function, language, &config, test_file, result);
-        result.functions.push((display.clone(), function));
+        add_violations(&context, function, result);
+        units_of.resize(result.violations.len() - first, index);
+        result.functions.push((display.clone(), function.clone()));
+    }
+    if let Some(changed) = options.changed.filter(|changed| changed.base.is_some())
+        && !units_of.is_empty()
+    {
+        compare_with_base(changed, &context, &functions, &units_of, result)?;
     }
     Ok(())
+}
+
+/// Adds baseline fields to this file's violations, the last `units_of.len()`
+/// in `result`, where `units_of[i]` indexes the violating unit in `functions`.
+fn compare_with_base(
+    changed: &ChangedFiles,
+    file: &FileContext<'_>,
+    functions: &[FunctionMetrics],
+    units_of: &[usize],
+    result: &mut ScanResult,
+) -> Result<()> {
+    let base = base_units(changed, file, result)?;
+    let pairing = base.as_deref().map_or_else(
+        || vec![Pairing::New; functions.len()],
+        |base| baseline::pair_units(functions, base),
+    );
+    let first = result.violations.len() - units_of.len();
+    for (violation, &index) in result.violations[first..].iter_mut().zip(units_of) {
+        let base_unit = match pairing[index] {
+            Pairing::Paired(base_index) => base.as_deref().map(|units| &units[base_index]),
+            Pairing::New | Pairing::Unmatched => None,
+        };
+        violation.baseline = Some(Baseline {
+            status: baseline::status(
+                base_unit,
+                pairing[index],
+                &violation.metric,
+                violation.value,
+            ),
+            base_metrics: base_unit.map(MetricValues::from),
+            limits: effective_limits(file, &functions[index]),
+        });
+    }
+    Ok(())
+}
+
+/// The file's units at the merge base, or `None` when it has no base.
+fn base_units(
+    changed: &ChangedFiles,
+    file: &FileContext<'_>,
+    result: &mut ScanResult,
+) -> Result<Option<Vec<FunctionMetrics>>> {
+    let Some(commit) = changed.base.as_deref() else {
+        return Ok(None);
+    };
+    if changed.untracked.iter().any(|path| path == file.matched) {
+        return Ok(None);
+    }
+    let path = changed
+        .renames
+        .get(file.matched)
+        .map_or(file.matched, PathBuf::as_path);
+    let content = match base_blob(&changed.repo_root, commit, path) {
+        BaseBlob::Missing => return Ok(None),
+        BaseBlob::Unreadable => None,
+        BaseBlob::Content(bytes) => String::from_utf8(bytes).ok(),
+    };
+    let units = content.and_then(|source| {
+        Language::from_path(path).and_then(|language| parse_source(language, &source).ok())
+    });
+    if units.is_none() {
+        result.notes.push(format!(
+            "{} has no readable base; its functions count as new",
+            file.display.display()
+        ));
+    }
+    Ok(units)
+}
+
+fn effective_limits(file: &FileContext<'_>, function: &FunctionMetrics) -> Limits {
+    let mut limits = file.config.limits_for(file.language.name());
+    for (metric, limit) in [
+        ("complexity", &mut limits.complexity),
+        ("cognitive", &mut limits.cognitive),
+        ("depth", &mut limits.depth),
+        ("lines", &mut limits.lines),
+        ("params", &mut limits.params),
+        ("bool_ops", &mut limits.bool_ops),
+        ("widget_depth", &mut limits.widget_depth),
+    ] {
+        if !applies(file, function, metric) {
+            *limit = None;
+        }
+    }
+    limits
+}
+
+/// Whether a metric's limit can fail this function.
+fn applies(file: &FileContext<'_>, function: &FunctionMetrics, metric: &str) -> bool {
+    let test_exempt = file.test_file && file.config.tests.exempt.iter().any(|item| item == metric);
+    let template_exempt = function.template && matches!(metric, "lines" | "params");
+    let widget_exempt = !function.widget && metric == "widget_depth";
+    !(test_exempt || template_exempt || widget_exempt)
 }
 
 fn changed_spans<'a>(path: &Path, changed: Option<&'a ChangedFiles>) -> Option<&'a [LineRange]> {
@@ -276,15 +407,8 @@ fn touches(function: &FunctionMetrics, ranges: &[LineRange]) -> bool {
         .any(|range| range.intersects(function.line, function.end_line))
 }
 
-fn add_violations(
-    file: &Path,
-    function: &FunctionMetrics,
-    language: Language,
-    config: &Config,
-    test_file: bool,
-    result: &mut ScanResult,
-) {
-    let limits = config.limits_for(language.name());
+fn add_violations(file: &FileContext<'_>, function: &FunctionMetrics, result: &mut ScanResult) {
+    let limits = file.config.limits_for(file.language.name());
     let metrics = [
         ("complexity", function.complexity, limits.complexity),
         ("cognitive", function.cognitive, limits.cognitive),
@@ -298,16 +422,17 @@ fn add_violations(
         let Some(limit) = limit.filter(|limit| value > *limit) else {
             continue;
         };
-        if test_file && config.tests.exempt.iter().any(|item| item == metric) {
+        if file.test_file && file.config.tests.exempt.iter().any(|item| item == metric) {
             continue;
         }
         result.violations.push(Violation {
-            file: file.to_path_buf(),
+            file: file.display.to_path_buf(),
             line: function.line,
             function: function.function.clone(),
             metric: metric.to_owned(),
             value,
             limit,
+            baseline: None,
         });
     }
 }
