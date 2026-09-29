@@ -1,6 +1,12 @@
-# PickCheck <version>
+# PickCheck 0.4.0
 
-<One paragraph on what this release is for.>
+This release changes what PickCheck fails on and lets it judge a branch
+instead of the whole file. Cognitive complexity replaces cyclomatic
+complexity as the default gate, so readable flat dispatch stops failing and
+deeply nested conditions start. `check --base` checks everything a branch
+changed since it forked, and compares each violation with the merge base, so a
+one-line edit in a legacy function no longer fails on debt that was already
+there when `--fail-on` excludes it.
 
 ## Changes
 
@@ -38,8 +44,26 @@
 
 ## Validation
 
-- <What was actually run, and where its evidence lives. Nothing aspirational.>
+- `cargo test --workspace --locked --all-targets`, `cargo clippy --workspace
+  --all-targets -- -D warnings`, `cargo run -- check crates`, and
+  `cargo llvm-cov --workspace --locked --fail-under-lines 94` (94.23% lines)
+  pass on `main` at fed4279: https://github.com/pickforge/pickcheck/actions/runs/36576086532
+- Golden fixtures cover every language, including hand-derived cognitive
+  values and the Dart mixin names.
+- The cognitive rollout numbers above come from scanning 32,805 functions in
+  19 repositories (#6).
+- `--base` and the baseline comparison are covered by CLI tests over real Git
+  repositories: committed, staged, unstaged and untracked changes, stacked
+  branches, renamed files, duplicate names, closure pairing, unreadable bases,
+  and `--fail-on` exit codes.
 
 ## Known limits
 
-- <What this release does not do, and what is not proven yet.>
+- The baseline comparison matches functions by name within a file. A renamed
+  function, or one moved into a different file, counts as `new`; a file
+  rename that Git detects keeps its functions paired.
+- Anonymous closures pair by position under their named owner. Adding or
+  removing a closure there makes its siblings `unmatched`.
+- With several merge bases in a criss-cross history, Git's choice is used.
+- Paths that are not valid UTF-8 are decoded lossily.
+- Hooks still check against `HEAD` and never compare with a base.
