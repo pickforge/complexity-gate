@@ -56,6 +56,7 @@ pickcheck check src                             # check a directory
 pickcheck check --changed                       # only functions touched by the Git diff
 pickcheck check --changed --verbose src/auth.ts # details for one failing file
 pickcheck check --base origin/main              # everything since the branch forked
+pickcheck check --base origin/main --fail-on new,worsened,unmatched  # fail only on new or worse debt
 pickcheck check --format json .                 # machine-readable report
 pickcheck doctor --coverage                     # config chain, grammars, unclassified syntax
 ```
@@ -65,7 +66,10 @@ Unsupported extensions are reported as `UNVERIFIED` without failing.
 `--changed` prints a summary capped at 20 paths and never scans outside a Git
 repository with `HEAD`. `--base <ref>` widens the diff to start where the
 branch forked from `<ref>`, like a pull request. Use the `DETAILS` command to
-inspect one failing file.
+inspect one failing file. With `--base`, each violation is also compared with
+the merge base and gets a status (`new`, `worsened`, `unmatched`, `improved`,
+`unchanged`); `--fail-on` limits which statuses fail, and the rest print as
+`WARN`.
 Explicit paths remain detailed by default; `--summary` makes them compact.
 
 ### Hooks

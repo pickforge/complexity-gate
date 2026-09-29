@@ -825,6 +825,211 @@ fn git(cwd: &Path, args: &[&str]) {
     );
 }
 
+#[test]
+fn base_compares_violations_with_the_merge_base() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"params":1}}"#).unwrap();
+    fs::write(
+        root.join("app.js"),
+        "function legacy(a, b) {\n  return a;\n}\n\
+         function grows(a, b) {\n  return a;\n}\n\
+         function shrinks(a, b, c) {\n  return a;\n}\n",
+    )
+    .unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    fs::write(
+        root.join("app.js"),
+        "function legacy(a, b) {\n  return b;\n}\n\
+         function grows(a, b, c) {\n  return a;\n}\n\
+         function shrinks(a, b) {\n  return a;\n}\n\
+         function added(a, b) {\n  return a;\n}\n",
+    )
+    .unwrap();
+    commit_all(root, "edit");
+
+    let verbose = command_output(root, &["check", "--base", "main", "--verbose", "app.js"]);
+    assert_eq!(verbose.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&verbose.stdout),
+        "FAIL app.js:1 legacy  params 2 > 1  unchanged\n\
+         FAIL app.js:4 grows  params 3 > 1  worsened from 2\n\
+         FAIL app.js:7 shrinks  params 2 > 1  improved from 3\n\
+         FAIL app.js:10 added  params 2 > 1  new\n"
+    );
+
+    let args = [
+        "check",
+        "--base",
+        "main",
+        "--fail-on",
+        "new,worsened,unmatched",
+    ];
+    let gated = command_output(root, &args);
+    assert_eq!(gated.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&gated.stdout),
+        "FAIL 1 changed file, 2 functions, 2 violations\n\
+         WARN 1 changed file, 2 functions, 2 violations\n\
+         FAIL app.js  2 functions, 2 violations\n\
+         WARN app.js  2 functions, 2 violations\n\
+         DETAILS pickcheck check --base main --fail-on new,worsened,unmatched --verbose <file>\n"
+    );
+    let warned = command_output(
+        root,
+        &[
+            "check",
+            "--base",
+            "main",
+            "--fail-on",
+            "unmatched",
+            "--verbose",
+            "app.js",
+        ],
+    );
+    assert_eq!(warned.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&warned.stdout).starts_with("WARN app.js:1 legacy"));
+
+    let json = command_output(
+        root,
+        &[
+            "check",
+            "--base",
+            "main",
+            "--fail-on",
+            "new",
+            "--format",
+            "json",
+        ],
+    );
+    assert_eq!(json.status.code(), Some(1));
+    let report: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(report["base"]["ref"], "main");
+    assert_eq!(report["base"]["commit"].as_str().unwrap().len(), 40);
+    assert_eq!(report["fail_on"], serde_json::json!(["new"]));
+    let legacy = &report["violations"][0];
+    assert_eq!(legacy["status"], "unchanged");
+    assert_eq!(legacy["base_metrics"]["params"], 2);
+    assert_eq!(legacy["limits"]["params"], 1);
+    assert_eq!(legacy["limits"]["complexity"], serde_json::Value::Null);
+    assert_eq!(legacy["limits"]["widget_depth"], serde_json::Value::Null);
+    assert_eq!(
+        report["violations"][3]["base_metrics"],
+        serde_json::Value::Null
+    );
+
+    let default = command_output(root, &["check", "--base", "main", "--format", "json"]);
+    let report: serde_json::Value = serde_json::from_slice(&default.stdout).unwrap();
+    assert_eq!(default.status.code(), Some(1));
+    assert_eq!(
+        report["fail_on"],
+        serde_json::json!(["new", "worsened", "unmatched", "improved", "unchanged"])
+    );
+    let plain = command_output(root, &["check", "--format", "json", "app.js"]);
+    let report: serde_json::Value = serde_json::from_slice(&plain.stdout).unwrap();
+    assert!(report.get("base").is_none() && report.get("fail_on").is_none());
+    assert!(report["violations"][0].get("status").is_none());
+}
+
+#[test]
+fn base_matches_renamed_files_duplicates_and_closures() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"params":1}}"#).unwrap();
+    let filler = (0..6)
+        .map(|index| format!("function filler{index}() {{\n  return {index};\n}}\n"))
+        .collect::<String>();
+    fs::write(
+        root.join("legacy.js"),
+        format!(
+            "{filler}function one() {{\n  function helper(a, b) {{ return a; }}\n  return helper;\n}}\n\
+             function two() {{\n  function helper(a, b, c) {{ return a; }}\n  return helper;\n}}\n\
+             function owner() {{\n  return [1].map((x, y) => x);\n}}\n\
+             function crowded() {{\n  return [1].map((x, y) => x);\n}}\n\
+             function oldName(a, b) {{\n  return a;\n}}\n"
+        ),
+    )
+    .unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["mv", "legacy.js", "moved.js"]);
+    fs::write(
+        root.join("moved.js"),
+        format!(
+            "{filler}function one() {{\n  function helper(a, b) {{ return a; }}\n  return helper;\n}}\n\
+             function two() {{\n  function helper(a, b, c) {{ return b; }}\n  return helper;\n}}\n\
+             function owner() {{\n  return [2].map((x, y) => y);\n}}\n\
+             function crowded() {{\n  return [1].map((x, y) => x).map((x, y) => y);\n}}\n\
+             function newName(a, b) {{\n  return a;\n}}\n\
+             function fresh() {{\n  return [1].map((x, y) => x);\n}}\n"
+        ),
+    )
+    .unwrap();
+
+    let output = command_output(root, &["check", "--base", "main", "--verbose", "moved.js"]);
+    let text = String::from_utf8_lossy(&output.stdout);
+    for expected in [
+        "moved.js:24 helper  params 3 > 1  unchanged",
+        "moved.js:28 <anonymous>  params 2 > 1  unchanged",
+        "moved.js:31 <anonymous>  params 2 > 1  unmatched",
+        "moved.js:33 newName  params 2 > 1  new",
+        "moved.js:37 <anonymous>  params 2 > 1  new",
+    ] {
+        assert!(
+            text.contains(expected),
+            "missing {expected}; stdout: {text}"
+        );
+    }
+    assert_eq!(text.matches("unmatched").count(), 2, "stdout: {text}");
+    assert!(!text.contains("moved.js:20"), "untouched helper: {text}");
+}
+
+#[test]
+fn base_notes_unreadable_bases_and_rejects_bad_fail_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"params":1}}"#).unwrap();
+    fs::write(
+        root.join("bytes.js"),
+        b"function f(a, b) { return '\xff'; }\n",
+    )
+    .unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    fs::write(root.join("bytes.js"), "function f(a, b) { return 'ok'; }\n").unwrap();
+
+    let output = command_output(root, &["check", "--base", "main", "--verbose", "bytes.js"]);
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("FAIL bytes.js:1 f  params 2 > 1  new")
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("note: bytes.js has no readable base; its functions count as new")
+    );
+
+    for (args, error) in [
+        (&["check", "--changed", "--fail-on", "new"][..], "--base"),
+        (
+            &["check", "--base", "main", "--fail-on", "new,old"][..],
+            "unknown --fail-on status 'old'",
+        ),
+        (
+            &["check", "--base", "main", "--fail-on", ""][..],
+            "unknown --fail-on status ''",
+        ),
+    ] {
+        let output = command_output(root, args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(output.stdout.is_empty(), "{args:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(error), "{args:?}; stderr: {stderr}");
+    }
+}
+
 fn init_repo(cwd: &Path) {
     git(cwd, &["init", "-q", "-b", "main"]);
     git(cwd, &["config", "user.email", "test@example.com"]);

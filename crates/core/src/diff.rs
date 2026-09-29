@@ -38,7 +38,20 @@ pub struct ChangedFiles {
     /// Every tracked path the diff lists, old and new, including deletions,
     /// pure renames, and empty files that have no hunks.
     pub touched: Vec<PathBuf>,
+    /// The merge-base commit with `--base`, resolved once for the diff and
+    /// every base read.
+    pub base: Option<String>,
     pub fallback: bool,
+}
+
+/// A file's content at the merge base.
+#[derive(Debug, PartialEq, Eq)]
+pub enum BaseBlob {
+    /// The base commit has no file at that path.
+    Missing,
+    /// The path exists but is not a readable file.
+    Unreadable,
+    Content(Vec<u8>),
 }
 
 /// Diffs the working tree against `HEAD`.
@@ -67,10 +80,8 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
             ..ChangedFiles::default()
         });
     }
-    let from = match base {
-        Some(base) => merge_base(&repo_root, base)?,
-        None => "HEAD".to_owned(),
-    };
+    let base = base.map(|base| merge_base(&repo_root, base)).transpose()?;
+    let from = base.clone().unwrap_or_else(|| "HEAD".to_owned());
     let hunks = git_diff(&repo_root, &from, &["--unified=0"])?;
     // Name-status lists deletions, pure renames, and empty files, which have
     // no hunks, and it never quotes paths.
@@ -81,8 +92,30 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
         untracked: untracked(&repo_root)?,
         renames,
         touched,
+        base,
         repo_root,
         fallback: false,
+    })
+}
+
+/// Reads `path`, relative to the repository root, at `commit` without
+/// textconv or filters.
+pub fn base_blob(repo_root: &Path, commit: &str, path: &Path) -> Result<BaseBlob> {
+    let object = format!("{commit}:{}", path.to_string_lossy());
+    let Some(kind) = git_line(repo_root, &["cat-file", "-t", &object])? else {
+        return Ok(BaseBlob::Missing);
+    };
+    if kind != "blob" {
+        return Ok(BaseBlob::Unreadable);
+    }
+    let output = git_command(repo_root)
+        .args(["cat-file", "blob", &object])
+        .output()
+        .context("failed to execute git cat-file")?;
+    Ok(if output.status.success() {
+        BaseBlob::Content(output.stdout)
+    } else {
+        BaseBlob::Unreadable
     })
 }
 

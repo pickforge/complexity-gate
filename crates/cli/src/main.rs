@@ -12,8 +12,8 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use pickcheck_core::{
-    ScanOptions, changed_files, changed_files_since, coverage_unknowns, grammar_inventory,
-    load_config, scan,
+    ScanOptions, Status, Violation, changed_files, changed_files_since, coverage_unknowns,
+    grammar_inventory, load_config, scan,
 };
 use serde::Serialize;
 
@@ -31,6 +31,8 @@ enum Command {
         changed: bool,
         #[arg(long, value_name = "REF")]
         base: Option<String>,
+        #[arg(long, value_name = "STATUSES", requires = "base")]
+        fail_on: Option<String>,
         #[arg(long, conflicts_with = "summary")]
         verbose: bool,
         #[arg(long, conflicts_with = "verbose")]
@@ -58,7 +60,12 @@ enum Command {
 pub(crate) enum Scope<'a> {
     Paths,
     Changed,
-    Base(&'a str),
+    /// `fail_on` is `None` when `--fail-on` is not given, which fails all
+    /// statuses.
+    Base {
+        base: &'a str,
+        fail_on: Option<&'a [Status]>,
+    },
 }
 
 impl Scope<'_> {
@@ -71,7 +78,21 @@ impl Scope<'_> {
         match self {
             Scope::Paths => None,
             Scope::Changed => Some("--changed"),
-            Scope::Base(_) => Some("--base"),
+            Scope::Base { .. } => Some("--base"),
+        }
+    }
+
+    /// Whether a violation counts toward exit 1, as opposed to `WARN`.
+    pub(crate) fn fails(self, violation: &Violation) -> bool {
+        match (self, &violation.baseline) {
+            (
+                Scope::Base {
+                    fail_on: Some(statuses),
+                    ..
+                },
+                Some(baseline),
+            ) => statuses.contains(&baseline.status),
+            _ => true,
         }
     }
 }
@@ -105,14 +126,19 @@ fn run(cli: Cli) -> Result<u8> {
         Command::Check {
             changed,
             base,
+            fail_on,
             verbose,
             summary,
             format,
             config,
             paths,
         } => {
+            let fail_on = fail_on.as_deref().map(parse_fail_on).transpose()?;
             let scope = match (changed, base.as_deref()) {
-                (_, Some(base)) => Scope::Base(base),
+                (_, Some(base)) => Scope::Base {
+                    base,
+                    fail_on: fail_on.as_deref(),
+                },
                 (true, None) => Scope::Changed,
                 (false, None) => Scope::Paths,
             };
@@ -142,7 +168,7 @@ fn run_check(
     let changes = match scope {
         Scope::Paths => None,
         Scope::Changed => Some(changed_files(&cwd)?),
-        Scope::Base(base) => Some(changed_files_since(&cwd, base)?),
+        Scope::Base { base, .. } => Some(changed_files_since(&cwd, base)?),
     };
     if let Some(flag) = scope.flag()
         && changes.as_ref().is_some_and(|item| item.fallback)
@@ -165,13 +191,34 @@ fn run_check(
             let output = if summary || (scope.is_diff() && !verbose) {
                 report::summary(&result, scope)
             } else {
-                report::detailed(&result)
+                report::detailed(&result, scope)
             };
             print!("{output}");
         }
-        Format::Json => print_json(&result)?,
+        Format::Json => print_json(
+            &result,
+            scope,
+            changes.as_ref().and_then(|item| item.base.as_deref()),
+        )?,
     }
-    Ok(u8::from(!result.violations.is_empty()))
+    Ok(u8::from(
+        result.violations.iter().any(|item| scope.fails(item)),
+    ))
+}
+
+fn parse_fail_on(value: &str) -> Result<Vec<Status>> {
+    let mut statuses = Vec::new();
+    for name in value.split(',').map(str::trim) {
+        let status = Status::parse(name).with_context(|| {
+            format!(
+                "unknown --fail-on status '{name}'; use new, worsened, unmatched, improved, or unchanged"
+            )
+        })?;
+        if !statuses.contains(&status) {
+            statuses.push(status);
+        }
+    }
+    Ok(statuses)
 }
 
 fn validate_output_options(
@@ -201,15 +248,42 @@ fn validate_output_options(
 struct JsonReport<'a> {
     version: &'static str,
     checked: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base: Option<JsonBase<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fail_on: Option<&'a [Status]>,
     violations: &'a [pickcheck_core::Violation],
     unverified: &'a [pickcheck_core::Unverified],
     notes: &'a [String],
 }
 
-fn print_json(result: &pickcheck_core::ScanResult) -> Result<()> {
+#[derive(Serialize)]
+struct JsonBase<'a> {
+    #[serde(rename = "ref")]
+    reference: &'a str,
+    commit: &'a str,
+}
+
+fn print_json(
+    result: &pickcheck_core::ScanResult,
+    scope: Scope<'_>,
+    commit: Option<&str>,
+) -> Result<()> {
+    let (base, fail_on) = match (scope, commit) {
+        (Scope::Base { base, fail_on }, Some(commit)) => (
+            Some(JsonBase {
+                reference: base,
+                commit,
+            }),
+            Some(fail_on.unwrap_or(&Status::ALL)),
+        ),
+        _ => (None, None),
+    };
     let report = JsonReport {
         version: env!("CARGO_PKG_VERSION"),
         checked: result.checked,
+        base,
+        fail_on,
         violations: &result.violations,
         unverified: &result.unverified,
         notes: &result.notes,

@@ -12,16 +12,18 @@ struct FileFailures {
     violations: usize,
 }
 
-pub(crate) fn detailed(result: &ScanResult) -> String {
+pub(crate) fn detailed(result: &ScanResult, scope: Scope<'_>) -> String {
     let violations = result.violations.iter().map(|item| {
         format!(
-            "FAIL {}:{} {}  {} {} > {}",
+            "{} {}:{} {}  {} {} > {}{}",
+            label(scope, item),
             item.file.display(),
             item.line,
             item.function,
             item.metric,
             item.value,
-            item.limit
+            item.limit,
+            baseline_suffix(item)
         )
     });
     let unverified = result
@@ -33,23 +35,12 @@ pub(crate) fn detailed(result: &ScanResult) -> String {
 
 pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
     let changed = scope.is_diff();
-    let failures = group_failures(&result.violations);
+    let (failing, warned): (Vec<&Violation>, Vec<&Violation>) =
+        result.violations.iter().partition(|item| scope.fails(item));
+    let failures = group_failures(failing);
+    let warnings = group_failures(warned);
     let mut output = Vec::new();
-    if !failures.is_empty() {
-        let function_count = failures
-            .values()
-            .map(|failure| failure.functions.len())
-            .sum::<usize>();
-        output.push(format!(
-            "FAIL {} {}, {} {}, {} {}",
-            failures.len(),
-            scoped_noun("file", failures.len(), changed),
-            function_count,
-            plural("function", function_count),
-            result.violations.len(),
-            plural("violation", result.violations.len())
-        ));
-    }
+    output.extend(total_line("FAIL", &failures, changed));
     if !result.unverified.is_empty() {
         output.push(format!(
             "UNVERIFIED {} {}",
@@ -57,37 +48,21 @@ pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
             scoped_noun("file", result.unverified.len(), changed)
         ));
     }
+    output.extend(total_line("WARN", &warnings, changed));
 
-    let mut shown = 0;
-    for (file, failure) in &failures {
-        if shown == SUMMARY_PATH_LIMIT {
-            break;
-        }
-        output.push(format!(
-            "FAIL {}  {} {}, {} {}",
-            file.display(),
-            failure.functions.len(),
-            plural("function", failure.functions.len()),
-            failure.violations,
-            plural("violation", failure.violations)
-        ));
-        shown += 1;
-    }
-    for item in &result.unverified {
-        if shown == SUMMARY_PATH_LIMIT {
-            break;
-        }
-        output.push(format!(
-            "UNVERIFIED {}  {}",
-            item.file.display(),
-            item.reason
-        ));
-        shown += 1;
-    }
-
-    let total = failures.len() + result.unverified.len();
-    if total > shown {
-        output.push(format!("... {} more files", total - shown));
+    let rows = file_rows("FAIL", &failures)
+        .chain(
+            result
+                .unverified
+                .iter()
+                .map(|item| format!("UNVERIFIED {}  {}", item.file.display(), item.reason)),
+        )
+        .chain(file_rows("WARN", &warnings))
+        .collect::<Vec<_>>();
+    let total = rows.len();
+    output.extend(rows.into_iter().take(SUMMARY_PATH_LIMIT));
+    if total > SUMMARY_PATH_LIMIT {
+        output.push(format!("... {} more files", total - SUMMARY_PATH_LIMIT));
     }
     if total > 0 {
         output.push(details_hint(scope));
@@ -95,7 +70,60 @@ pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
     lines(output)
 }
 
-fn group_failures(violations: &[Violation]) -> BTreeMap<&std::path::Path, FileFailures> {
+fn label(scope: Scope<'_>, item: &Violation) -> &'static str {
+    if scope.fails(item) { "FAIL" } else { "WARN" }
+}
+
+/// The status, plus the base value when it differs, for `--base` runs.
+fn baseline_suffix(item: &Violation) -> String {
+    let Some(baseline) = &item.baseline else {
+        return String::new();
+    };
+    let from = baseline
+        .base_metrics
+        .as_ref()
+        .and_then(|metrics| metrics.get(&item.metric))
+        .filter(|value| *value != item.value);
+    match from {
+        Some(value) => format!("  {} from {value}", baseline.status.name()),
+        None => format!("  {}", baseline.status.name()),
+    }
+}
+
+type FileGroups<'a> = BTreeMap<&'a std::path::Path, FileFailures>;
+
+fn total_line(label: &str, groups: &FileGroups<'_>, changed: bool) -> Option<String> {
+    if groups.is_empty() {
+        return None;
+    }
+    let functions = groups
+        .values()
+        .map(|group| group.functions.len())
+        .sum::<usize>();
+    let violations = groups.values().map(|group| group.violations).sum::<usize>();
+    Some(format!(
+        "{label} {} {}, {functions} {}, {violations} {}",
+        groups.len(),
+        scoped_noun("file", groups.len(), changed),
+        plural("function", functions),
+        plural("violation", violations)
+    ))
+}
+
+fn file_rows<'a>(label: &'a str, groups: &'a FileGroups<'_>) -> impl Iterator<Item = String> + 'a {
+    groups.iter().map(move |(file, group)| {
+        format!(
+            "{label} {}  {} {}, {} {}",
+            file.display(),
+            group.functions.len(),
+            plural("function", group.functions.len()),
+            group.violations,
+            plural("violation", group.violations)
+        )
+    })
+}
+
+fn group_failures(violations: Vec<&Violation>) -> FileGroups<'_> {
     let mut files = BTreeMap::new();
     for item in violations {
         let failure = files
@@ -111,9 +139,13 @@ fn details_hint(scope: Scope<'_>) -> String {
     match scope {
         Scope::Paths => "DETAILS pickcheck check --verbose <file>".to_owned(),
         Scope::Changed => "DETAILS pickcheck check --changed --verbose <file>".to_owned(),
-        Scope::Base(base) => format!(
-            "DETAILS pickcheck check --base {} --verbose <file>",
-            shell_word(base)
+        Scope::Base { base, fail_on } => format!(
+            "DETAILS pickcheck check --base {}{} --verbose <file>",
+            shell_word(base),
+            fail_on.map_or_else(String::new, |statuses| {
+                let names = statuses.iter().map(|status| status.name());
+                format!(" --fail-on {}", names.collect::<Vec<_>>().join(","))
+            })
         ),
     }
 }
@@ -178,6 +210,7 @@ mod tests {
                 metric: "depth".to_owned(),
                 value: 5,
                 limit: 4,
+                baseline: None,
             });
         }
         result.violations.push(Violation {
@@ -187,6 +220,7 @@ mod tests {
             metric: "complexity".to_owned(),
             value: 16,
             limit: 15,
+            baseline: None,
         });
         result.unverified.push(Unverified {
             file: PathBuf::from("src/unknown.kt"),
@@ -206,11 +240,17 @@ mod tests {
     #[test]
     fn base_hint_quotes_refs_with_shell_syntax() {
         assert_eq!(
-            details_hint(Scope::Base("origin/main")),
+            details_hint(Scope::Base {
+                base: "origin/main",
+                fail_on: None
+            }),
             "DETAILS pickcheck check --base origin/main --verbose <file>"
         );
         assert_eq!(
-            details_hint(Scope::Base("topic;echo${IFS}it's")),
+            details_hint(Scope::Base {
+                base: "topic;echo${IFS}it's",
+                fail_on: None
+            }),
             r"DETAILS pickcheck check --base 'topic;echo${IFS}it'\''s' --verbose <file>"
         );
         assert_eq!(shell_word("HEAD~1"), "'HEAD~1'");
@@ -220,6 +260,6 @@ mod tests {
     fn empty_reports_are_silent() {
         let result = ScanResult::default();
         assert!(summary(&result, Scope::Changed).is_empty());
-        assert!(detailed(&result).is_empty());
+        assert!(detailed(&result, Scope::Paths).is_empty());
     }
 }

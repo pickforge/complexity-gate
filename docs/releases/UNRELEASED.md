@@ -29,6 +29,12 @@
   config is deleted or renamed, not only when it is edited. (#32)
 - Dart mixin members are now reported as `Mixin.member`, like class and
   extension members, so their names in reports change. (#30)
+- `check --base` compares each violation with the same function at the merge
+  base and reports a status: `new`, `worsened`, `unmatched`, `improved`, or
+  `unchanged`. `--fail-on` picks which statuses fail; the others print as
+  `WARN` and keep the exit code at 0. Without `--fail-on` every violation still
+  fails, and hooks and plain `--changed` are unchanged. JSON gains `base`,
+  `fail_on`, and per-violation `status`, `base_metrics`, and `limits`. (#30)
 
 ## Validation
 
