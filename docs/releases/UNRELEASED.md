@@ -21,6 +21,10 @@
   (#24)
 - `&&` inside Rust let chains (`if let … && let …`) now counts toward
   `complexity` and `bool_ops`. (#26)
+- `check --base <ref>` checks the functions a branch changed since it forked
+  from `<ref>`, committed or not, plus untracked files. It implies
+  `--changed`, and a stacked branch checked against its parent reports only
+  its own functions. (#29)
 
 ## Validation
 

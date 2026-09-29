@@ -234,6 +234,152 @@ fn changed_defaults_to_summary_and_verbose_requires_a_file() {
 }
 
 #[test]
+fn base_covers_the_branch_since_its_fork_point() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let simple = "function simple() { return 1; }\n";
+    let complex = "function changed(x) { if (x) return 1; return 0; }\n";
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"depth":0}}"#).unwrap();
+    fs::write(root.join("working.js"), simple).unwrap();
+    fs::write(root.join("staged.js"), simple).unwrap();
+    fs::write(root.join("mainline.js"), simple).unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    fs::write(root.join("committed.js"), complex).unwrap();
+    commit_all(root, "feature");
+    git(root, &["checkout", "-q", "main"]);
+    fs::write(root.join("mainline.js"), complex).unwrap();
+    commit_all(root, "mainline");
+    git(root, &["checkout", "-q", "feature"]);
+    fs::write(root.join("working.js"), complex).unwrap();
+    fs::write(root.join("staged.js"), complex).unwrap();
+    git(root, &["add", "staged.js"]);
+    fs::write(root.join("untracked.js"), complex).unwrap();
+
+    let base = command_output(root, &["check", "--base", "main"]);
+    let text = String::from_utf8_lossy(&base.stdout);
+    assert_eq!(
+        base.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&base.stderr)
+    );
+    assert!(text.starts_with("FAIL 4 changed files, 4 functions, 4 violations\n"));
+    for expected in ["committed.js", "working.js", "staged.js", "untracked.js"] {
+        assert!(
+            text.contains(&format!("FAIL {expected}  ")),
+            "stdout: {text}"
+        );
+    }
+    assert!(!text.contains("mainline.js"), "stdout: {text}");
+    assert!(text.ends_with("DETAILS pickcheck check --base main --verbose <file>\n"));
+    let both = command_output(root, &["check", "--changed", "--base", "main"]);
+    assert_eq!(both.stdout, base.stdout);
+
+    let head = String::from_utf8(command_output(root, &["check", "--changed"]).stdout).unwrap();
+    assert!(!head.contains("committed.js"), "stdout: {head}");
+
+    let verbose = command_output(
+        root,
+        &["check", "--base", "main", "--verbose", "committed.js"],
+    );
+    assert_eq!(verbose.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&verbose.stdout).contains("FAIL committed.js:1 changed"));
+
+    commit_all(root, "feature work");
+    git(root, &["checkout", "-qb", "stacked"]);
+    fs::write(root.join("stacked.js"), complex).unwrap();
+    commit_all(root, "stacked");
+    let stacked =
+        String::from_utf8(command_output(root, &["check", "--base", "feature"]).stdout).unwrap();
+    assert!(stacked.starts_with("FAIL 1 changed file, 1 function, 1 violation\n"));
+    assert!(stacked.contains("FAIL stacked.js  "), "stdout: {stacked}");
+    let whole =
+        String::from_utf8(command_output(root, &["check", "--base", "main"]).stdout).unwrap();
+    assert!(whole.starts_with("FAIL 5 changed files"), "stdout: {whole}");
+}
+
+#[test]
+fn base_follows_renames_and_reports_only_edited_functions() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let function = |name: &str, value: usize| {
+        format!("function {name}(x) {{ if (x) return {value}; return 0; }}\n")
+    };
+    let kept = (0..8)
+        .map(|index| function(&format!("kept{index}"), 1))
+        .collect::<String>();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"depth":0}}"#).unwrap();
+    fs::write(
+        root.join("legacy.js"),
+        format!("{kept}{}", function("edited", 1)),
+    )
+    .unwrap();
+    init_repo(root);
+    git(root, &["config", "diff.renames", "false"]);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["mv", "legacy.js", "moved.js"]);
+    fs::write(
+        root.join("moved.js"),
+        format!("{kept}{}", function("edited", 2)),
+    )
+    .unwrap();
+    commit_all(root, "rename");
+
+    let output = command_output(root, &["check", "--base", "main", "--verbose", "moved.js"]);
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(text.contains("FAIL moved.js:9 edited"), "stdout: {text}");
+    assert!(!text.contains("kept"), "stdout: {text}");
+}
+
+#[test]
+fn base_rejects_unknown_refs_options_and_unrelated_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("bad.js"), complex_function()).unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-q", "--orphan", "unrelated"]);
+    commit_all(root, "unrelated");
+    git(root, &["checkout", "-q", "main"]);
+
+    for (base, error) in [
+        ("missing", "--base missing does not name a commit"),
+        ("--output=leak", "--base --output=leak is not a Git ref"),
+        ("unrelated", "--base unrelated has no merge base with HEAD"),
+        ("", "--base needs a Git ref"),
+    ] {
+        let output = command_output(root, &["check", &format!("--base={base}")]);
+        assert_eq!(output.status.code(), Some(2), "base {base}");
+        assert!(output.stdout.is_empty(), "base {base}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(error), "base {base}; stderr: {stderr}");
+    }
+    assert!(!root.join("leak").exists());
+
+    let verbose = command_output(root, &["check", "--base", "main", "--verbose"]);
+    assert_eq!(verbose.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&verbose.stderr)
+            .contains("--base --verbose requires at least one explicit file")
+    );
+    let outside = tempfile::tempdir().unwrap();
+    let output = command_output(outside.path(), &["check", "--base", "main"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "--base requires a Git repository with HEAD; run from a repository or omit --base"
+    ));
+}
+
+#[test]
 fn changed_explicit_paths_normalize_parent_components() {
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("src");
@@ -596,6 +742,17 @@ fn git(cwd: &Path, args: &[&str]) {
             .unwrap()
             .success()
     );
+}
+
+fn init_repo(cwd: &Path) {
+    git(cwd, &["init", "-q", "-b", "main"]);
+    git(cwd, &["config", "user.email", "test@example.com"]);
+    git(cwd, &["config", "user.name", "Test"]);
+}
+
+fn commit_all(cwd: &Path, message: &str) {
+    git(cwd, &["add", "."]);
+    git(cwd, &["commit", "-qm", message]);
 }
 
 fn complex_function() -> String {

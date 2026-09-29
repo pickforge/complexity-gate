@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pickcheck_core::{ScanResult, Violation};
 
+use crate::Scope;
+
 const SUMMARY_PATH_LIMIT: usize = 20;
 
 #[derive(Default)]
@@ -29,7 +31,8 @@ pub(crate) fn detailed(result: &ScanResult) -> String {
     lines(violations.chain(unverified))
 }
 
-pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
+pub(crate) fn summary(result: &ScanResult, scope: Scope<'_>) -> String {
+    let changed = scope.is_diff();
     let failures = group_failures(&result.violations);
     let mut output = Vec::new();
     if !failures.is_empty() {
@@ -40,7 +43,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!(
             "FAIL {} {}, {} {}, {} {}",
             failures.len(),
-            scope("file", failures.len(), changed),
+            scoped_noun("file", failures.len(), changed),
             function_count,
             plural("function", function_count),
             result.violations.len(),
@@ -51,7 +54,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!(
             "UNVERIFIED {} {}",
             result.unverified.len(),
-            scope("file", result.unverified.len(), changed)
+            scoped_noun("file", result.unverified.len(), changed)
         ));
     }
 
@@ -87,7 +90,7 @@ pub(crate) fn summary(result: &ScanResult, changed: bool) -> String {
         output.push(format!("... {} more files", total - shown));
     }
     if total > 0 {
-        output.push(details_hint(changed).to_owned());
+        output.push(details_hint(scope));
     }
     lines(output)
 }
@@ -104,15 +107,29 @@ fn group_failures(violations: &[Violation]) -> BTreeMap<&std::path::Path, FileFa
     files
 }
 
-fn details_hint(changed: bool) -> &'static str {
-    if changed {
-        "DETAILS pickcheck check --changed --verbose <file>"
-    } else {
-        "DETAILS pickcheck check --verbose <file>"
+fn details_hint(scope: Scope<'_>) -> String {
+    match scope {
+        Scope::Paths => "DETAILS pickcheck check --verbose <file>".to_owned(),
+        Scope::Changed => "DETAILS pickcheck check --changed --verbose <file>".to_owned(),
+        Scope::Base(base) => format!(
+            "DETAILS pickcheck check --base {} --verbose <file>",
+            shell_word(base)
+        ),
     }
 }
 
-fn scope(noun: &'static str, count: usize, changed: bool) -> String {
+/// Git allows shell metacharacters in branch names, so a ref copied into the
+/// hint must stay one argument when the command is pasted into a shell.
+fn shell_word(value: &str) -> String {
+    let safe = |char: char| char.is_ascii_alphanumeric() || "-_./@:,+%".contains(char);
+    if !value.is_empty() && value.chars().all(safe) {
+        value.to_owned()
+    } else {
+        format!("'{}'", value.replace('\'', r"'\''"))
+    }
+}
+
+fn scoped_noun(noun: &'static str, count: usize, changed: bool) -> String {
     let noun = plural(noun, count);
     if changed {
         format!("changed {noun}")
@@ -176,7 +193,7 @@ mod tests {
             reason: "no grammar for .kt".to_owned(),
         });
 
-        let output = summary(&result, true);
+        let output = summary(&result, Scope::Changed);
 
         assert!(output.starts_with("FAIL 22 changed files, 22 functions, 23 violations\n"));
         assert!(output.contains("UNVERIFIED 1 changed file\n"));
@@ -187,9 +204,22 @@ mod tests {
     }
 
     #[test]
+    fn base_hint_quotes_refs_with_shell_syntax() {
+        assert_eq!(
+            details_hint(Scope::Base("origin/main")),
+            "DETAILS pickcheck check --base origin/main --verbose <file>"
+        );
+        assert_eq!(
+            details_hint(Scope::Base("topic;echo${IFS}it's")),
+            r"DETAILS pickcheck check --base 'topic;echo${IFS}it'\''s' --verbose <file>"
+        );
+        assert_eq!(shell_word("HEAD~1"), "'HEAD~1'");
+    }
+
+    #[test]
     fn empty_reports_are_silent() {
         let result = ScanResult::default();
-        assert!(summary(&result, true).is_empty());
+        assert!(summary(&result, Scope::Changed).is_empty());
         assert!(detailed(&result).is_empty());
     }
 }

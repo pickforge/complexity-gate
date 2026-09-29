@@ -179,7 +179,11 @@ fn report_post_edit(harness: Harness, input: &HookInput, paths: &[PathBuf]) -> R
     if result.violations.is_empty() {
         return Ok(0);
     }
-    emit_feedback(harness, &report::summary(&result, false), false)
+    emit_feedback(
+        harness,
+        &report::summary(&result, crate::Scope::Paths),
+        false,
+    )
 }
 
 fn report_post_changed(harness: Harness, input: &HookInput) -> Result<u8> {
@@ -196,7 +200,11 @@ fn report_post_changed(harness: Harness, input: &HookInput) -> Result<u8> {
     if result.violations.is_empty() {
         return Ok(0);
     }
-    emit_feedback(harness, &report::summary(&result, true), false)
+    emit_feedback(
+        harness,
+        &report::summary(&result, crate::Scope::Changed),
+        false,
+    )
 }
 
 fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
@@ -215,7 +223,7 @@ fn report_stop(harness: Harness, input: &HookInput) -> Result<u8> {
         reset_counter(&input.session_id)?;
         return Ok(0);
     }
-    let report = report::summary(&result, true);
+    let report = report::summary(&result, crate::Scope::Changed);
     let max = load_config(&cwd, None)?.config.hook.max_blocks;
     if increment_counter(&input.session_id)? > max {
         eprintln!("UNRESOLVED\n{report}");

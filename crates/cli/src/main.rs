@@ -12,7 +12,8 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use pickcheck_core::{
-    ScanOptions, changed_files, coverage_unknowns, grammar_inventory, load_config, scan,
+    ScanOptions, changed_files, changed_files_since, coverage_unknowns, grammar_inventory,
+    load_config, scan,
 };
 use serde::Serialize;
 
@@ -28,6 +29,8 @@ enum Command {
     Check {
         #[arg(long)]
         changed: bool,
+        #[arg(long, value_name = "REF")]
+        base: Option<String>,
         #[arg(long, conflicts_with = "summary")]
         verbose: bool,
         #[arg(long, conflicts_with = "verbose")]
@@ -47,6 +50,30 @@ enum Command {
         #[arg(long)]
         coverage: bool,
     },
+}
+
+/// What `check` measured: explicit paths, the diff against `HEAD`, or the
+/// diff against the merge base with `--base`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Scope<'a> {
+    Paths,
+    Changed,
+    Base(&'a str),
+}
+
+impl Scope<'_> {
+    pub(crate) fn is_diff(self) -> bool {
+        self != Scope::Paths
+    }
+
+    /// The flag that selected a diff scope, for error messages.
+    pub(crate) fn flag(self) -> Option<&'static str> {
+        match self {
+            Scope::Paths => None,
+            Scope::Changed => Some("--changed"),
+            Scope::Base(_) => Some("--base"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -77,12 +104,20 @@ fn run(cli: Cli) -> Result<u8> {
     match cli.command {
         Command::Check {
             changed,
+            base,
             verbose,
             summary,
             format,
             config,
             paths,
-        } => run_check(changed, verbose, summary, format, config.as_deref(), &paths),
+        } => {
+            let scope = match (changed, base.as_deref()) {
+                (_, Some(base)) => Scope::Base(base),
+                (true, None) => Scope::Changed,
+                (false, None) => Scope::Paths,
+            };
+            run_check(scope, verbose, summary, format, config.as_deref(), &paths)
+        }
         Command::Hook { harness } => hooks::run(match harness {
             Harness::Claude => hooks::Harness::Claude,
             Harness::Codex => hooks::Harness::Codex,
@@ -95,7 +130,7 @@ fn run(cli: Cli) -> Result<u8> {
 }
 
 fn run_check(
-    changed: bool,
+    scope: Scope<'_>,
     verbose: bool,
     summary: bool,
     format: Format,
@@ -103,11 +138,17 @@ fn run_check(
     paths: &[PathBuf],
 ) -> Result<u8> {
     let cwd = env::current_dir().context("cannot determine current directory")?;
-    validate_output_options(changed, verbose, summary, format, paths, &cwd)?;
-    let changes = changed.then(|| changed_files(&cwd)).transpose()?;
-    if changes.as_ref().is_some_and(|item| item.fallback) {
+    validate_output_options(scope.flag(), verbose, summary, format, paths, &cwd)?;
+    let changes = match scope {
+        Scope::Paths => None,
+        Scope::Changed => Some(changed_files(&cwd)?),
+        Scope::Base(base) => Some(changed_files_since(&cwd, base)?),
+    };
+    if let Some(flag) = scope.flag()
+        && changes.as_ref().is_some_and(|item| item.fallback)
+    {
         anyhow::bail!(
-            "--changed requires a Git repository with HEAD; run from a repository or omit --changed"
+            "{flag} requires a Git repository with HEAD; run from a repository or omit {flag}"
         );
     }
     let result = scan(&ScanOptions {
@@ -121,8 +162,8 @@ fn run_check(
             for note in &result.notes {
                 eprintln!("note: {note}");
             }
-            let output = if summary || (changed && !verbose) {
-                report::summary(&result, changed)
+            let output = if summary || (scope.is_diff() && !verbose) {
+                report::summary(&result, scope)
             } else {
                 report::detailed(&result)
             };
@@ -134,7 +175,7 @@ fn run_check(
 }
 
 fn validate_output_options(
-    changed: bool,
+    diff_flag: Option<&str>,
     verbose: bool,
     summary: bool,
     format: Format,
@@ -144,11 +185,14 @@ fn validate_output_options(
     if format == Format::Json && (verbose || summary) {
         anyhow::bail!("--verbose and --summary cannot be used with --format json");
     }
-    if changed && verbose && paths.is_empty() {
-        anyhow::bail!("--changed --verbose requires at least one explicit file");
+    let Some(flag) = diff_flag.filter(|_| verbose) else {
+        return Ok(());
+    };
+    if paths.is_empty() {
+        anyhow::bail!("{flag} --verbose requires at least one explicit file");
     }
-    if changed && verbose && paths.iter().any(|path| cwd.join(path).is_dir()) {
-        anyhow::bail!("--changed --verbose accepts files, not directories");
+    if paths.iter().any(|path| cwd.join(path).is_dir()) {
+        anyhow::bail!("{flag} --verbose accepts files, not directories");
     }
     Ok(())
 }

@@ -470,7 +470,7 @@ not classified, so a grammar upgrade that introduces new syntax is visible.
 Binary: `pickcheck`.
 
 ```
-pickcheck check [--changed] [--verbose|--summary] [--format text|json] [--config <path>] [paths…]
+pickcheck check [--changed] [--base <ref>] [--verbose|--summary] [--format text|json] [--config <path>] [paths…]
 pickcheck hook claude
 pickcheck hook codex
 pickcheck hook cursor
@@ -499,14 +499,26 @@ pickcheck --version
   `ignore` applies before any language lookup, so ignored paths never appear as
   `UNVERIFIED`. Explicit paths are normalized (`.`/`..`) before intersecting.
   Non-UTF-8 diff output is decoded lossily; hunk headers are ASCII. Git is invoked with
-  `--no-ext-diff --no-textconv`, external diff, textconv, fsmonitor, and hooks
+  `--no-ext-diff --no-textconv --find-renames`, external diff, textconv, fsmonitor, and hooks
   disabled, and `GIT_DIR`/`GIT_WORK_TREE`/`GIT_EXTERNAL_DIFF`/`GIT_CONFIG_*`
-  removed from its environment.
+  removed from its environment. Rename detection is explicit so a renamed file
+  reports only the functions its edits touch, whatever `diff.renames` says.
+- With `--base <ref>`: the same as `--changed`, which it implies, but the diff
+  starts at the merge base of `<ref>` and `HEAD` instead of `HEAD`, so branch
+  commits count together with staged, unstaged, and untracked work. This is the
+  three-dot rule of a pull request diff: a branch stacked on another branch and
+  checked against it reports only its own functions. The ref is resolved with
+  `git rev-parse --verify <ref>^{commit}` and then `git merge-base <commit> HEAD`,
+  and the resulting commit replaces `HEAD` in `git diff`. A ref starting with
+  `-`, a ref that names no commit, or no merge base (for example in a shallow
+  clone) exits 2 with a short error and does not scan; it never falls back to
+  `HEAD`. When a criss-cross history has several merge bases, Git's choice is
+  used. Hooks always diff against `HEAD`.
 - `--changed` and explicit `paths` together: intersection (changed functions within
   those paths).
 - Text output for explicit paths is detailed by default, one line per violation,
   sorted by file then line. `--verbose` selects the same output explicitly and
-  never prints passing functions. With `--changed`, `--verbose` requires at least
+  never prints passing functions. With `--changed` or `--base`, `--verbose` requires at least
   one explicit file and rejects directories:
 
 ```
@@ -519,7 +531,8 @@ UNVERIFIED src/Foo.kt  no grammar for .kt
   same output for explicit paths. It reports total failing files, functions,
   violations, and unverified files; lists failing paths before unverified paths;
   caps the combined list at 20 paths; reports the omitted count; and ends with a
-  scoped `DETAILS` command. Clean output is empty and never prints `PASS`:
+  scoped `DETAILS` command, which repeats `--base <ref>` when given. Clean output
+  is empty and never prints `PASS`:
 
 ```
 FAIL 2 changed files, 3 functions, 4 violations
