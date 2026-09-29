@@ -615,8 +615,8 @@ rather than line spans:
 
 Status is decided per violation, in this order:
 
-1. `new`: the file has no base, or the function is unpaired and not covered by
-   the next case.
+1. `new`: the file has no base, or the function is unpaired, unless the next
+   case applies.
 2. `unmatched`: the function is an anonymous unit whose owner is paired but has
    a different number of anonymous units at the base.
 3. Otherwise the violated metric is compared with its value in the paired base
@@ -661,14 +661,15 @@ WARN src/legacy.ts  1 function, 1 violation
 DETAILS pickcheck check --base origin/main --fail-on new,worsened,unmatched --verbose <file>
 ```
 
-JSON under `--base` adds top-level `base` (`ref` as given and the full merge-base
-`commit`) and `fail_on`, the effective fail set, all five when defaulted. Each
-violation gains `status`, `base_metrics` (every metric's value in the paired
-base unit, or `null` for `new` and `unmatched`), and `limits` (every metric's
-effective limit for that function, `null` when the check is off or does not
-apply, as with a test file's `lines`, a Svelte template unit's `lines` and
-`params`, or `widget_depth` outside a Dart `build` method). Violations outside the fail set stay in `violations`, and the other
-fields are unchanged. An excerpt:
+JSON under `--base` adds top-level `base` (`ref` as given and the full
+merge-base `commit`) and `fail_on`, the effective fail set, all five when
+defaulted. Each violation gains `status`, `base_metrics` (every metric's value
+in the paired base unit, or `null` for `new` and `unmatched`), and `limits`
+(every metric's effective limit for that function, `null` when the check is off
+or does not apply, as with a test file's `lines`, a Svelte template unit's
+`lines` and `params`, or `widget_depth` outside a Dart `build` method).
+Violations outside the fail set stay in `violations`, and the other fields are
+unchanged. An excerpt:
 
 ```json
 {
