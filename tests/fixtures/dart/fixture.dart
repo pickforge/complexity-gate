@@ -332,3 +332,17 @@ List<int> collection(List<int> xs, bool a, bool b) => [
 ];
 
 List<dynamic> cascadeElse(bool a, dynamic obj) => [if (a) obj else obj..x = 1];
+
+// Mixin members are qualified by the mixin. A closure inside one stays
+// <anonymous>, and a function after the mixin is not qualified by it.
+mixin Greeter on Object {
+  String greet(String name) => name.isEmpty ? 'hi' : 'hi $name'; // +1 ternary
+  int get size => 0;
+  void callBack(List<int> xs) {
+    xs.forEach((x) { // anonymous callback: base 1
+      print(x);
+    });
+  }
+}
+
+void afterMixin() {}

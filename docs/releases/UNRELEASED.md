@@ -27,6 +27,8 @@
   its own functions. (#29)
 - The `.pickcheck.json changed in this diff` note now also appears when the
   config is deleted or renamed, not only when it is edited. (#32)
+- Dart mixin members are now reported as `Mixin.member`, like class and
+  extension members, so their names in reports change. (#30)
 
 ## Validation
 

@@ -905,6 +905,7 @@ fn qualify_method(node: Node<'_>, language: Language, name: &str, source: &str) 
         }
         Language::Dart => &[
             "class_declaration",
+            "mixin_declaration",
             "extension_declaration",
             "extension_type_declaration",
         ],
