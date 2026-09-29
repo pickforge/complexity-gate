@@ -137,10 +137,14 @@ fn nearest_project_root(start: &Path) -> Option<PathBuf> {
 
 fn config_changed(changed: &ChangedFiles) -> bool {
     !changed.fallback
-        && changed.spans.keys().chain(&changed.untracked).any(|path| {
-            path.file_name()
-                .is_some_and(|name| name == ".pickcheck.json")
-        })
+        && changed
+            .touched
+            .iter()
+            .chain(&changed.untracked)
+            .any(|path| {
+                path.file_name()
+                    .is_some_and(|name| name == ".pickcheck.json")
+            })
 }
 
 fn collect_changed_files(

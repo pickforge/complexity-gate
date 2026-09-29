@@ -405,6 +405,87 @@ fn changed_explicit_paths_normalize_parent_components() {
 }
 
 #[test]
+fn changed_config_note_covers_deleted_and_renamed_configs() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("pkg")).unwrap();
+    fs::create_dir_all(root.join("other")).unwrap();
+    fs::write(
+        root.join("pkg/.pickcheck.json"),
+        r#"{"limits":{"depth":4}}"#,
+    )
+    .unwrap();
+    fs::write(root.join("other/keep.txt"), "keep\n").unwrap();
+    fs::write(root.join("notes.txt"), "notes\n").unwrap();
+    fs::create_dir_all(root.join("tab\tdir")).unwrap();
+    fs::write(root.join("tab\tdir/.pickcheck.json"), "{}").unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+
+    // A tab makes Git quote patch headers, and an empty file has none.
+    fs::write(
+        root.join("tab\tdir/.pickcheck.json"),
+        r#"{"limits":{"depth":3}}"#,
+    )
+    .unwrap();
+    let quoted = command_output(root, &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&quoted.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+    git(root, &["reset", "-q", "--hard"]);
+    fs::write(root.join("other/.pickcheck.json"), "").unwrap();
+    git(root, &["add", "other/.pickcheck.json"]);
+    let empty = command_output(root, &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&empty.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+    git(root, &["reset", "-q", "--hard"]);
+
+    for (change, noted) in [
+        (&["rm", "-q", "pkg/.pickcheck.json"][..], true),
+        (
+            &["mv", "pkg/.pickcheck.json", "other/.pickcheck.json"][..],
+            true,
+        ),
+        (&["mv", "pkg/.pickcheck.json", "pkg/old.json"][..], true),
+        (&["rm", "-q", "notes.txt"][..], false),
+        (&["mv", "notes.txt", "notes.md"][..], false),
+    ] {
+        git(root, change);
+        let output = command_output(root, &["check", "--changed"]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            stderr.contains("note: .pickcheck.json changed in this diff"),
+            noted,
+            "git {change:?}; stderr: {stderr}"
+        );
+        git(root, &["reset", "-q", "--hard"]);
+    }
+
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["mv", "pkg/.pickcheck.json", "pkg/old.json"]);
+    commit_all(root, "park config");
+    git(root, &["mv", "pkg/old.json", "pkg/.pickcheck.json"]);
+    let renamed_to = command_output(root, &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&renamed_to.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+    git(root, &["reset", "-q", "--hard"]);
+
+    // Against main, the parked and then removed config is a plain deletion.
+    git(root, &["rm", "-q", "pkg/old.json"]);
+    commit_all(root, "drop config");
+    let base = command_output(root, &["check", "--base", "main"]);
+    assert!(
+        String::from_utf8_lossy(&base.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+}
+
+#[test]
 fn changed_config_is_noted_in_text_and_json_reports() {
     let dir = tempfile::tempdir().unwrap();
     let config = dir.path().join(".pickcheck.json");

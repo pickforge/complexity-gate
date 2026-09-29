@@ -25,6 +25,8 @@
   from `<ref>`, committed or not, plus untracked files. It implies
   `--changed`, and a stacked branch checked against its parent reports only
   its own functions. (#29)
+- The `.pickcheck.json changed in this diff` note now also appears when the
+  config is deleted or renamed, not only when it is edited. (#32)
 
 ## Validation
 
