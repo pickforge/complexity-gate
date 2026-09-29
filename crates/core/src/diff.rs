@@ -33,6 +33,10 @@ pub struct ChangedFiles {
     pub repo_root: PathBuf,
     pub spans: BTreeMap<PathBuf, Vec<LineRange>>,
     pub untracked: Vec<PathBuf>,
+    /// Renamed files, new path to old path.
+    pub renames: BTreeMap<PathBuf, PathBuf>,
+    /// Tracked files the diff deletes.
+    pub deleted: Vec<PathBuf>,
     pub fallback: bool,
 }
 
@@ -66,7 +70,22 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
         Some(base) => merge_base(&repo_root, base)?,
         None => "HEAD".to_owned(),
     };
-    let output = git_command(&repo_root)
+    let hunks = git_diff(&repo_root, &from, &["--unified=0"])?;
+    // Name-status lists deletions and pure renames, which have no hunks.
+    let (renames, deleted) =
+        parse_name_status(&git_diff(&repo_root, &from, &["--name-status", "-z"])?);
+    Ok(ChangedFiles {
+        spans: parse_diff_hunks(&hunks),
+        untracked: untracked(&repo_root)?,
+        renames,
+        deleted,
+        repo_root,
+        fallback: false,
+    })
+}
+
+fn git_diff(repo_root: &Path, from: &str, format: &[&str]) -> Result<String> {
+    let output = git_command(repo_root)
         .args([
             "-c",
             "core.quotePath=false",
@@ -83,9 +102,9 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
             "--no-textconv",
             "--no-color",
             "--find-renames",
-            "--unified=0",
         ])
-        .args([from.as_str(), "--"])
+        .args(format)
+        .args([from, "--"])
         .output()
         .context("failed to execute git diff")?;
     if !output.status.success() {
@@ -94,14 +113,30 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    let text = String::from_utf8_lossy(&output.stdout);
-    let mut changed = ChangedFiles {
-        repo_root: repo_root.clone(),
-        spans: parse_diff_hunks(&text),
-        ..ChangedFiles::default()
-    };
-    changed.untracked = untracked(&repo_root)?;
-    Ok(changed)
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Reads `git diff --name-status -z` fields: a status, then one path, or the
+/// old and new paths for a rename or copy.
+fn parse_name_status(output: &str) -> (BTreeMap<PathBuf, PathBuf>, Vec<PathBuf>) {
+    let mut renames = BTreeMap::new();
+    let mut deleted = Vec::new();
+    let mut fields = output.split('\0').filter(|field| !field.is_empty());
+    while let (Some(status), Some(path)) = (fields.next(), fields.next()) {
+        match status.chars().next() {
+            Some('R') => {
+                if let Some(new) = fields.next() {
+                    renames.insert(PathBuf::from(new), PathBuf::from(path));
+                }
+            }
+            Some('C') => {
+                fields.next();
+            }
+            Some('D') => deleted.push(PathBuf::from(path)),
+            _ => {}
+        }
+    }
+    (renames, deleted)
 }
 
 pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
@@ -244,6 +279,20 @@ fn post_image_range(header: &str) -> Option<LineRange> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn name_status_maps_renames_and_deletions() {
+        let output = "M\0kept.js\0R087\0old dir/a.js\0new\tdir/a.js\0C100\0src.js\0copy.js\0D\0gone.js\0A\0added.js\0";
+        let (renames, deleted) = parse_name_status(output);
+        assert_eq!(
+            renames,
+            BTreeMap::from([(
+                PathBuf::from("new\tdir/a.js"),
+                PathBuf::from("old dir/a.js")
+            )])
+        );
+        assert_eq!(deleted, vec![PathBuf::from("gone.js")]);
+    }
 
     #[test]
     fn synthetic_hunks_use_post_image_and_skip_deletions() {

@@ -665,9 +665,11 @@ Resolution, later wins, shallow merge per top-level key:
 `tests.patterns` and `ignore` globs match paths relative to the Git repository
 root (or to the common scan root outside Git), never to the process cwd.
 `tests.exempt` accepts only `lines`; `hook.max_blocks` is clamped to at least 1.
-A repo config is trusted like any repo file. Under `--changed`, when a
-`.pickcheck.json` is itself among the changed files the report starts with
-`note: .pickcheck.json changed in this diff` so a reviewer sees it.
+A repo config is trusted like any repo file. Under `--changed`, when the diff
+adds, modifies, or deletes a `.pickcheck.json`, or renames a file from or to
+that name, the report starts with `note: .pickcheck.json changed in this diff`
+so a reviewer sees it. Deletions and pure renames have no hunks, so they are
+read from `git diff --name-status -z` over the same range.
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
