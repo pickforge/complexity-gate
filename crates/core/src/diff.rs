@@ -99,24 +99,39 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
 }
 
 /// Reads `path`, relative to the repository root, at `commit` without
-/// textconv or filters.
-pub fn base_blob(repo_root: &Path, commit: &str, path: &Path) -> Result<BaseBlob> {
-    let object = format!("{commit}:{}", path.to_string_lossy());
-    let Some(kind) = git_line(repo_root, &["cat-file", "-t", &object])? else {
-        return Ok(BaseBlob::Missing);
-    };
-    if kind != "blob" {
-        return Ok(BaseBlob::Unreadable);
-    }
-    let output = git_command(repo_root)
-        .args(["cat-file", "blob", &object])
+/// textconv or filters. Only an entry that `ls-tree` does not list is
+/// missing; every Git failure makes the base unreadable.
+pub fn base_blob(repo_root: &Path, commit: &str, path: &Path) -> BaseBlob {
+    let path = path.to_string_lossy();
+    let listing = match git_command(repo_root)
+        .env("GIT_LITERAL_PATHSPECS", "1")
+        .args(["ls-tree", "-z", commit, "--", path.as_ref()])
         .output()
-        .context("failed to execute git cat-file")?;
-    Ok(if output.status.success() {
-        BaseBlob::Content(output.stdout)
-    } else {
-        BaseBlob::Unreadable
-    })
+    {
+        Ok(output) if output.status.success() => output.stdout,
+        _ => return BaseBlob::Unreadable,
+    };
+    let listing = String::from_utf8_lossy(&listing);
+    let Some(meta) = listing.split('\0').find_map(|entry| {
+        entry
+            .split_once('\t')
+            .filter(|(_, name)| *name == path)
+            .map(|(meta, _)| meta)
+    }) else {
+        return BaseBlob::Missing;
+    };
+    // `<mode> <type> <object>`
+    let mut fields = meta.split(' ').skip(1);
+    let (Some("blob"), Some(object)) = (fields.next(), fields.next()) else {
+        return BaseBlob::Unreadable;
+    };
+    match git_command(repo_root)
+        .args(["cat-file", "blob", object])
+        .output()
+    {
+        Ok(output) if output.status.success() => BaseBlob::Content(output.stdout),
+        _ => BaseBlob::Unreadable,
+    }
 }
 
 fn git_diff(repo_root: &Path, from: &str, format: &[&str]) -> Result<String> {

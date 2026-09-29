@@ -282,31 +282,31 @@ fn scan_file(
     };
     let spans = changed_spans(&matched_path, options.changed);
     let first = result.violations.len();
-    let mut owners = Vec::new();
+    let mut units_of = Vec::new();
     for (index, function) in functions.iter().enumerate() {
         if spans.is_some_and(|ranges| !touches(function, ranges)) {
             continue;
         }
         result.checked += 1;
         add_violations(&context, function, result);
-        owners.resize(result.violations.len() - first, index);
+        units_of.resize(result.violations.len() - first, index);
         result.functions.push((display.clone(), function.clone()));
     }
     if let Some(changed) = options.changed.filter(|changed| changed.base.is_some())
-        && !owners.is_empty()
+        && !units_of.is_empty()
     {
-        compare_with_base(changed, &context, &functions, &owners, result)?;
+        compare_with_base(changed, &context, &functions, &units_of, result)?;
     }
     Ok(())
 }
 
-/// Adds baseline fields to this file's violations, the last `owners.len()`
-/// in `result`, where `owners[i]` indexes the violating unit in `functions`.
+/// Adds baseline fields to this file's violations, the last `units_of.len()`
+/// in `result`, where `units_of[i]` indexes the violating unit in `functions`.
 fn compare_with_base(
     changed: &ChangedFiles,
     file: &FileContext<'_>,
     functions: &[FunctionMetrics],
-    owners: &[usize],
+    units_of: &[usize],
     result: &mut ScanResult,
 ) -> Result<()> {
     let base = base_units(changed, file, result)?;
@@ -314,8 +314,8 @@ fn compare_with_base(
         || vec![Pairing::New; functions.len()],
         |base| baseline::pair_units(functions, base),
     );
-    let first = result.violations.len() - owners.len();
-    for (violation, &index) in result.violations[first..].iter_mut().zip(owners) {
+    let first = result.violations.len() - units_of.len();
+    for (violation, &index) in result.violations[first..].iter_mut().zip(units_of) {
         let base_unit = match pairing[index] {
             Pairing::Paired(base_index) => base.as_deref().map(|units| &units[base_index]),
             Pairing::New | Pairing::Unmatched => None,
@@ -350,7 +350,7 @@ fn base_units(
         .renames
         .get(file.matched)
         .map_or(file.matched, PathBuf::as_path);
-    let content = match base_blob(&changed.repo_root, commit, path)? {
+    let content = match base_blob(&changed.repo_root, commit, path) {
         BaseBlob::Missing => return Ok(None),
         BaseBlob::Unreadable => None,
         BaseBlob::Content(bytes) => String::from_utf8(bytes).ok(),

@@ -1030,6 +1030,133 @@ fn base_notes_unreadable_bases_and_rejects_bad_fail_on() {
     }
 }
 
+#[test]
+fn base_limits_are_null_where_a_check_does_not_apply() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("tests")).unwrap();
+    fs::write(
+        root.join(".pickcheck.json"),
+        r#"{"limits":{"depth":0,"lines":0}}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("tests/a.js"),
+        "function t(x) {\n  if (x) return 1;\n}\n",
+    )
+    .unwrap();
+    fs::write(root.join("c.svelte"), "{#if x}\n  <p>a</p>\n{/if}\n").unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    fs::write(
+        root.join("tests/a.js"),
+        "function t(x) {\n  if (x) return 2;\n}\n",
+    )
+    .unwrap();
+    fs::write(root.join("c.svelte"), "{#if x}\n  <p>b</p>\n{/if}\n").unwrap();
+
+    let output = command_output(root, &["check", "--base", "HEAD", "--format", "json"]);
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let limits = |file: &str, function: &str| {
+        report["violations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["file"] == file && item["function"] == function)
+            .unwrap_or_else(|| panic!("no {function} in {report}"))["limits"]
+            .clone()
+    };
+    let test_file = limits("tests/a.js", "t");
+    assert_eq!(test_file["lines"], serde_json::Value::Null);
+    assert_eq!(test_file["depth"], 0);
+    let template = limits("c.svelte", "{#if}");
+    assert_eq!(template["lines"], serde_json::Value::Null);
+    assert_eq!(template["params"], serde_json::Value::Null);
+    assert_eq!(template["depth"], 0);
+}
+
+#[test]
+fn base_keeps_script_closures_owned_by_the_file_across_a_svelte_rename() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"params":1}}"#).unwrap();
+    let filler = (0..12)
+        .map(|index| format!("export const value{index} = {index};\n"))
+        .collect::<String>();
+    fs::write(
+        root.join("widget.js"),
+        format!("{filler}export const pairs = [1].map((x, y) => x);\n"),
+    )
+    .unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["mv", "widget.js", "widget.svelte"]);
+    fs::write(
+        root.join("widget.svelte"),
+        format!("<script>\n{filler}export const pairs = [2].map((x, y) => y);\n</script>\n"),
+    )
+    .unwrap();
+    commit_all(root, "to svelte");
+
+    let output = command_output(
+        root,
+        &["check", "--base", "main", "--verbose", "widget.svelte"],
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        text.contains("<anonymous>  params 2 > 1  unchanged"),
+        "stdout: {text}; stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn base_treats_added_files_as_new_and_non_files_as_unreadable() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join(".pickcheck.json"), r#"{"limits":{"params":1}}"#).unwrap();
+    fs::create_dir_all(root.join("was_dir.js")).unwrap();
+    fs::write(root.join("was_dir.js/inner.txt"), "x\n").unwrap();
+    init_repo(root);
+    commit_all(root, "initial");
+    git(root, &["checkout", "-qb", "feature"]);
+    git(root, &["rm", "-rq", "was_dir.js"]);
+    fs::write(root.join("was_dir.js"), "function d(a, b) { return a; }\n").unwrap();
+    fs::write(root.join("added.js"), "function n(a, b) { return a; }\n").unwrap();
+    commit_all(root, "files");
+
+    let output = command_output(
+        root,
+        &[
+            "check",
+            "--base",
+            "main",
+            "--verbose",
+            "added.js",
+            "was_dir.js",
+        ],
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        text.contains("FAIL added.js:1 n  params 2 > 1  new"),
+        "stdout: {text}"
+    );
+    assert!(
+        text.contains("FAIL was_dir.js:1 d  params 2 > 1  new"),
+        "stdout: {text}"
+    );
+    assert!(
+        !stderr.contains("added.js has no readable base"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("note: was_dir.js has no readable base; its functions count as new"),
+        "stderr: {stderr}"
+    );
+}
+
 fn init_repo(cwd: &Path) {
     git(cwd, &["init", "-q", "-b", "main"]);
     git(cwd, &["config", "user.email", "test@example.com"]);

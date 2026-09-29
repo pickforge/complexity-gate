@@ -177,14 +177,17 @@ fn owner(units: &[FunctionMetrics], index: usize) -> Option<usize> {
     units
         .iter()
         .enumerate()
-        .filter(|(candidate, unit)| {
-            *candidate != index
-                && unit.function != ANONYMOUS
-                && unit.span.0 <= start
-                && end <= unit.span.1
-        })
+        .filter(|(candidate, unit)| *candidate != index && can_own(unit))
+        .filter(|(_, unit)| unit.span.0 <= start && end <= unit.span.1)
         .min_by_key(|(_, unit)| unit.span.1 - unit.span.0)
         .map(|(candidate, _)| candidate)
+}
+
+/// Svelte template units never own script closures: the synthetic
+/// `<template>` spans the whole file, which would make a `.js` file renamed to
+/// `.svelte` give its closures a new owner.
+fn can_own(unit: &FunctionMetrics) -> bool {
+    !unit.template && unit.function != ANONYMOUS
 }
 
 #[cfg(test)]
@@ -267,6 +270,18 @@ mod tests {
                 Pairing::New,
                 Pairing::Paired(5),
             ]
+        );
+    }
+
+    #[test]
+    fn template_units_do_not_own_script_closures() {
+        let base = [unit(ANONYMOUS, (10, 20), 0)];
+        let mut template = unit("<template>", (0, 100), 0);
+        template.template = true;
+        let current = [template, unit(ANONYMOUS, (30, 40), 0)];
+        assert_eq!(
+            pair_units(&current, &base),
+            [Pairing::New, Pairing::Paired(0)]
         );
     }
 

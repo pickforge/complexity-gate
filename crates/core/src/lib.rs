@@ -14,4 +14,4 @@ pub use diff::{
     parse_diff_hunks,
 };
 pub use language::{FunctionMetrics, Language, coverage_unknowns, grammar_inventory, parse_source};
-pub use scan::{ScanOptions, ScanResult, Unverified, Violation, scan};
+pub use scan::{Baseline, ScanOptions, ScanResult, Unverified, Violation, scan};
