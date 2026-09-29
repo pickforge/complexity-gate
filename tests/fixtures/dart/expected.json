@@ -264,6 +264,36 @@
         "hand_derived": true,
         "derivation": "base 1; collection if +1",
         "cognitive_derivation": "collection if +1; else +1 once, although the cascade gives the alternative two children"
+      },
+      {
+        "function": "Greeter.greet",
+        "line": 339,
+        "complexity": 2,
+        "cognitive_derivation": "one conditional at nesting 0, +1"
+      },
+      {
+        "function": "Greeter.size",
+        "line": 340,
+        "complexity": 1,
+        "cognitive_derivation": "mixin getter with no flow breaks"
+      },
+      {
+        "function": "Greeter.callBack",
+        "line": 341,
+        "complexity": 1,
+        "cognitive_derivation": "no flow breaks; the callback is its own function"
+      },
+      {
+        "function": "<anonymous>",
+        "line": 342,
+        "complexity": 1,
+        "cognitive_derivation": "callback inside a mixin method stays unqualified, no flow breaks"
+      },
+      {
+        "function": "afterMixin",
+        "line": 348,
+        "complexity": 1,
+        "cognitive_derivation": "top-level function after a mixin is not qualified by it, no flow breaks"
       }
     ]
   },
@@ -661,6 +691,61 @@
       "depth": 0,
       "lines": 1,
       "params": 2,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "Greeter.greet",
+      "line": 339,
+      "complexity": 2,
+      "cognitive": 1,
+      "depth": 0,
+      "lines": 1,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "Greeter.size",
+      "line": 340,
+      "complexity": 1,
+      "cognitive": 0,
+      "depth": 0,
+      "lines": 1,
+      "params": 0,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "Greeter.callBack",
+      "line": 341,
+      "complexity": 1,
+      "cognitive": 0,
+      "depth": 0,
+      "lines": 5,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "<anonymous>",
+      "line": 342,
+      "complexity": 1,
+      "cognitive": 0,
+      "depth": 0,
+      "lines": 3,
+      "params": 1,
+      "bool_ops": 0,
+      "widget_depth": 0
+    },
+    {
+      "function": "afterMixin",
+      "line": 348,
+      "complexity": 1,
+      "cognitive": 0,
+      "depth": 0,
+      "lines": 1,
+      "params": 0,
       "bool_ops": 0,
       "widget_depth": 0
     }
