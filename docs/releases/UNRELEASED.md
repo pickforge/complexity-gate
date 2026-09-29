@@ -59,8 +59,9 @@ there when `--fail-on` excludes it.
 
 ## Known limits
 
-- The baseline comparison matches functions by name. A renamed function, or
-  one moved to another file, counts as `new`.
+- The baseline comparison matches functions by name within a file. A renamed
+  function, or one moved into a different file, counts as `new`; a file
+  rename that Git detects keeps its functions paired.
 - Anonymous closures pair by position under their named owner. Adding or
   removing a closure there makes its siblings `unmatched`.
 - With several merge bases in a criss-cross history, Git's choice is used.
