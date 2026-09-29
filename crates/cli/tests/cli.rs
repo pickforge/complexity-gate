@@ -417,8 +417,31 @@ fn changed_config_note_covers_deleted_and_renamed_configs() {
     .unwrap();
     fs::write(root.join("other/keep.txt"), "keep\n").unwrap();
     fs::write(root.join("notes.txt"), "notes\n").unwrap();
+    fs::create_dir_all(root.join("tab\tdir")).unwrap();
+    fs::write(root.join("tab\tdir/.pickcheck.json"), "{}").unwrap();
     init_repo(root);
     commit_all(root, "initial");
+
+    // A tab makes Git quote patch headers, and an empty file has none.
+    fs::write(
+        root.join("tab\tdir/.pickcheck.json"),
+        r#"{"limits":{"depth":3}}"#,
+    )
+    .unwrap();
+    let quoted = command_output(root, &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&quoted.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+    git(root, &["reset", "-q", "--hard"]);
+    fs::write(root.join("other/.pickcheck.json"), "").unwrap();
+    git(root, &["add", "other/.pickcheck.json"]);
+    let empty = command_output(root, &["check", "--changed"]);
+    assert!(
+        String::from_utf8_lossy(&empty.stderr)
+            .contains("note: .pickcheck.json changed in this diff")
+    );
+    git(root, &["reset", "-q", "--hard"]);
 
     for (change, noted) in [
         (&["rm", "-q", "pkg/.pickcheck.json"][..], true),

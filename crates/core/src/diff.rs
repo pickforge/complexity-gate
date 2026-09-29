@@ -35,8 +35,9 @@ pub struct ChangedFiles {
     pub untracked: Vec<PathBuf>,
     /// Renamed files, new path to old path.
     pub renames: BTreeMap<PathBuf, PathBuf>,
-    /// Tracked files the diff deletes.
-    pub deleted: Vec<PathBuf>,
+    /// Every tracked path the diff lists, old and new, including deletions,
+    /// pure renames, and empty files that have no hunks.
+    pub touched: Vec<PathBuf>,
     pub fallback: bool,
 }
 
@@ -71,14 +72,15 @@ fn collect_changes(cwd: &Path, base: Option<&str>) -> Result<ChangedFiles> {
         None => "HEAD".to_owned(),
     };
     let hunks = git_diff(&repo_root, &from, &["--unified=0"])?;
-    // Name-status lists deletions and pure renames, which have no hunks.
-    let (renames, deleted) =
+    // Name-status lists deletions, pure renames, and empty files, which have
+    // no hunks, and it never quotes paths.
+    let (renames, touched) =
         parse_name_status(&git_diff(&repo_root, &from, &["--name-status", "-z"])?);
     Ok(ChangedFiles {
         spans: parse_diff_hunks(&hunks),
         untracked: untracked(&repo_root)?,
         renames,
-        deleted,
+        touched,
         repo_root,
         fallback: false,
     })
@@ -120,23 +122,21 @@ fn git_diff(repo_root: &Path, from: &str, format: &[&str]) -> Result<String> {
 /// old and new paths for a rename or copy.
 fn parse_name_status(output: &str) -> (BTreeMap<PathBuf, PathBuf>, Vec<PathBuf>) {
     let mut renames = BTreeMap::new();
-    let mut deleted = Vec::new();
+    let mut touched = Vec::new();
     let mut fields = output.split('\0').filter(|field| !field.is_empty());
     while let (Some(status), Some(path)) = (fields.next(), fields.next()) {
-        match status.chars().next() {
-            Some('R') => {
-                if let Some(new) = fields.next() {
-                    renames.insert(PathBuf::from(new), PathBuf::from(path));
-                }
+        let path = PathBuf::from(path);
+        if matches!(status.chars().next(), Some('R' | 'C'))
+            && let Some(new) = fields.next().map(PathBuf::from)
+        {
+            if status.starts_with('R') {
+                renames.insert(new.clone(), path.clone());
             }
-            Some('C') => {
-                fields.next();
-            }
-            Some('D') => deleted.push(PathBuf::from(path)),
-            _ => {}
+            touched.push(new);
         }
+        touched.push(path);
     }
-    (renames, deleted)
+    (renames, touched)
 }
 
 pub fn repository_root(cwd: &Path) -> Result<Option<PathBuf>> {
@@ -281,9 +281,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn name_status_maps_renames_and_deletions() {
+    fn name_status_maps_renames_and_lists_every_path() {
         let output = "M\0kept.js\0R087\0old dir/a.js\0new\tdir/a.js\0C100\0src.js\0copy.js\0D\0gone.js\0A\0added.js\0";
-        let (renames, deleted) = parse_name_status(output);
+        let (renames, touched) = parse_name_status(output);
         assert_eq!(
             renames,
             BTreeMap::from([(
@@ -291,7 +291,19 @@ mod tests {
                 PathBuf::from("old dir/a.js")
             )])
         );
-        assert_eq!(deleted, vec![PathBuf::from("gone.js")]);
+        assert_eq!(
+            touched,
+            [
+                "kept.js",
+                "new\tdir/a.js",
+                "old dir/a.js",
+                "copy.js",
+                "src.js",
+                "gone.js",
+                "added.js",
+            ]
+            .map(PathBuf::from)
+        );
     }
 
     #[test]

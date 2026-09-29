@@ -668,8 +668,9 @@ root (or to the common scan root outside Git), never to the process cwd.
 A repo config is trusted like any repo file. Under `--changed`, when the diff
 adds, modifies, or deletes a `.pickcheck.json`, or renames a file from or to
 that name, the report starts with `note: .pickcheck.json changed in this diff`
-so a reviewer sees it. Deletions and pure renames have no hunks, so they are
-read from `git diff --name-status -z` over the same range.
+so a reviewer sees it. The note reads paths from `git diff --name-status -z`
+over the same range, which lists deletions, pure renames, and empty files that
+have no hunks, and never quotes a path.
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
