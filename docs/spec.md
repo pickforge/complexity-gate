@@ -574,48 +574,58 @@ DETAILS pickcheck check --changed --verbose <file>
 
 ### Baseline (`--base`)
 
-With `--base`, every function that violates a limit is also measured at the
-merge base, so a caller can tell new or worsened debt from debt the branch
-only touched. Hooks, explicit paths, and `--changed` without `--base` never
-compare and keep the output above unchanged.
+With `--base`, every violation is also compared with the same function at the
+merge base, so a caller can tell new or worsened debt from debt the branch only
+touched. Explicit paths combined with `--base` restrict the changed set as usual
+and still compare. Hooks, and checks without `--base`, never compare and keep
+the output above unchanged.
 
 Base content:
 
-- The base path of a changed file is its old path when the diff renames it
-  (the `--name-status` rename map), otherwise the same path. Untracked files and
-  files the base does not contain have no base.
-- The base content is read with `git cat-file blob <merge-base>:<base path>`,
-  with the same Git hardening as the diff, so no textconv or filter runs.
-- The base content is measured with the grammar of the base path and with the
-  config and limits that apply to the current file, including its test
-  exemption, so a limit change in the diff never looks like a code change.
-- A base file that cannot be read or decoded as UTF-8, or whose path has no
-  grammar, gives no base, and the report adds
-  `note: <path> has no readable base; its functions count as new`.
+- The merge base is resolved once. The same commit is used for the diff, for
+  every base read, and for JSON `base.commit`.
+- Base content is read only for files with at least one violation. The base
+  path of a file is its old path when the diff renames it (the `--name-status`
+  rename map), otherwise the same path. Untracked files and files the base does
+  not contain have no base, without a note.
+- The base content is read with `git cat-file blob <commit>:<base path>`, with
+  the same Git hardening as the diff, so no textconv or filter runs.
+- The base content is measured with the grammar of the base path, the same way
+  as a current file, including recovered syntax errors. Limits and exemptions
+  are never applied at the base; status compares measured values, so a limit
+  change in the diff never looks like a code change.
+- A base file that cannot be read, is not UTF-8, has no grammar for its base
+  path, or fails to parse has no base, and the report adds
+  `note: <path> has no readable base; its functions count as new`, where
+  `<path>` is the reported path.
 
-Matching, per file, between the current and base units:
+Matching, per file, runs over every unit of both complete files, before any
+filtering by touched spans or violations, and ownership follows the syntax tree
+rather than line spans:
 
 - Units named anything but `<anonymous>` match by reported name (`Type.name`
-  for methods, the Svelte unit names). When a name occurs more than once at
-  either revision, occurrences pair in source order and the extras stay
-  unpaired. A renamed function does not match its old name.
-- An `<anonymous>` unit belongs to its innermost enclosing named unit, or to
-  the file when none encloses it. Anonymous units pair in source order only
-  when their owner is paired (or both are the file) and the owner has the same
-  number of anonymous units at both revisions. When the owner has no match, its
-  anonymous units have no match either. When the owner matched but the counts
-  differ, they are `unmatched`.
+  for methods, the Svelte unit names), at any nesting level. When a name occurs
+  more than once at either revision, occurrences pair in source order and the
+  extras stay unpaired. A renamed function does not match its old name.
+- An `<anonymous>` unit belongs to its innermost enclosing named unit, at any
+  depth through other anonymous units, or to the file when none encloses it.
+  The file owner is paired whenever the file has a base. Anonymous units pair
+  in source order when their owner is paired and has the same number of
+  anonymous units at both revisions.
 
-Status, one per reported function, using only the metrics it currently
-violates:
+Status is decided per violation, in this order:
 
-- `new`: no base, or no matching base unit.
-- `unmatched`: an anonymous unit whose owner matched with a different number of
-  anonymous units.
-- `worsened`: some violated metric is higher than at the base, including one
-  that was within its limit there.
-- `improved`: not worsened, and some violated metric is lower than at the base.
-- `unchanged`: every violated metric has its base value.
+1. `new`: the file has no base, or the function is unpaired and not covered by
+   the next case.
+2. `unmatched`: the function is an anonymous unit whose owner is paired but has
+   a different number of anonymous units at the base.
+3. Otherwise the violated metric is compared with its value in the paired base
+   unit: `worsened` when higher, including a value that was within its limit
+   there; `improved` when lower; `unchanged` when equal.
+
+Violations of one function can differ: a one-line edit that raises `cognitive`
+fails as `worsened` while the function's untouched `lines` violation stays
+`unchanged`.
 
 `--fail-on <statuses>` takes a comma-separated subset of `new`, `worsened`,
 `unmatched`, `improved`, and `unchanged`, default all five, so exit codes match
@@ -630,40 +640,47 @@ plus `from <base value>` when the base value differs:
 ```
 FAIL src/auth.ts:42 authenticate  cognitive 18 > 15  worsened from 16
 FAIL src/auth.ts:90 refresh  params 7 > 6  new
-WARN src/legacy.ts:12 notify  lines 140 > 100  unchanged
+WARN src/auth.ts:42 authenticate  lines 140 > 100  unchanged
 WARN src/legacy.ts:12 notify  cognitive 22 > 15  improved from 25
 ```
 
-The summary counts `FAIL` and `WARN` separately, lists failing paths, then
-unverified paths, then warned paths within the same 20-path cap, and prints
-the `DETAILS` command whenever it lists a path. Its `DETAILS` command repeats
-`--fail-on` when given. A run with only warnings prints the summary and exits 0:
+The summary prints totals for `FAIL`, then `UNVERIFIED`, then `WARN`, and lists
+paths in the same order. A file with both kinds of violation is listed under
+`FAIL` with its failing functions and violations and again under `WARN` with
+its warned ones, and a function can count in both. Every listed row counts
+toward the 20-path cap, and the omitted count counts rows. The `DETAILS`
+command is printed whenever a row is listed and repeats `--fail-on` when given.
+A run with only warnings exits 0 and still prints its summary. A mixed run:
 
 ```
 FAIL 1 changed file, 2 functions, 2 violations
-WARN 1 changed file, 1 function, 2 violations
+WARN 2 changed files, 2 functions, 2 violations
 FAIL src/auth.ts  2 functions, 2 violations
-WARN src/legacy.ts  1 function, 2 violations
+WARN src/auth.ts  1 function, 1 violation
+WARN src/legacy.ts  1 function, 1 violation
 DETAILS pickcheck check --base origin/main --fail-on new,worsened,unmatched --verbose <file>
 ```
 
-JSON under `--base` adds top-level `base` (`ref` as given and the merge-base
-`commit`) and `fail_on`, and each violation gains `status`, `base_metrics` (every
-metric's value at the base, or `null` for `new` and `unmatched`), and `limits`
-(every metric's effective limit for that function, `null` when off). Violations
-outside the fail set stay in `violations`:
+JSON under `--base` adds top-level `base` (`ref` as given and the full merge-base
+`commit`) and `fail_on`, the effective fail set, all five when defaulted. Each
+violation gains `status`, `base_metrics` (every metric's value in the paired
+base unit, or `null` for `new` and `unmatched`), and `limits` (every metric's
+effective limit for that function, `null` when the check is off or does not
+apply, as with a test file's `lines`, a Svelte template unit's `lines` and
+`params`, or `widget_depth` outside a Dart `build` method). Violations outside the fail set stay in `violations`, and the other
+fields are unchanged. An excerpt:
 
 ```json
 {
-  "base": {"ref": "origin/main", "commit": "4f1c2e9…"},
+  "base": {"ref": "origin/main", "commit": "4f1c2e9a7b3d5e6f8091a2b3c4d5e6f708192a3b"},
   "fail_on": ["new", "worsened", "unmatched"],
   "violations": [
-    {"file": "src/legacy.ts", "line": 12, "function": "notify",
+    {"file": "src/auth.ts", "line": 42, "function": "authenticate",
      "metric": "lines", "value": 140, "limit": 100, "status": "unchanged",
-     "base_metrics": {"complexity": 19, "cognitive": 25, "depth": 3,
+     "base_metrics": {"complexity": 19, "cognitive": 16, "depth": 3,
                       "lines": 140, "params": 2, "bool_ops": 1, "widget_depth": 0},
      "limits": {"complexity": null, "cognitive": 15, "depth": 4, "lines": 100,
-                "params": 6, "bool_ops": 3, "widget_depth": 7}}
+                "params": 6, "bool_ops": 3, "widget_depth": null}}
   ]
 }
 ```
