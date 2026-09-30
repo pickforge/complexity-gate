@@ -232,19 +232,30 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
         "",
         path,
     )?;
-    nested_keys(object, "limits", &Metric::ALL.map(Metric::name), path)?;
-    nested_keys(object, "tests", &["patterns", "exempt"], path)?;
+    nested_keys(object, "", "limits", &Metric::ALL.map(Metric::name), path)?;
+    nested_keys(object, "", "tests", &["patterns", "exempt"], path)?;
     validate_test_exempt(object, path)?;
-    nested_keys(object, "hook", &["max_blocks"], path)?;
+    nested_keys(object, "", "hook", &["max_blocks"], path)?;
     validate_language_keys(object, path)
 }
 
-fn nested_keys(root: &Map<String, Value>, key: &str, keys: &[&str], path: &Path) -> Result<()> {
+fn nested_keys(
+    root: &Map<String, Value>,
+    parent: &str,
+    key: &str,
+    keys: &[&str],
+    path: &Path,
+) -> Result<()> {
     if let Some(value) = root.get(key) {
+        let full = if parent.is_empty() {
+            key.to_string()
+        } else {
+            format!("{parent}.{key}")
+        };
         let object = value
             .as_object()
-            .ok_or_else(|| anyhow::anyhow!("{key} in {} must be an object", path.display()))?;
-        allowed(object, keys, key, path)?;
+            .ok_or_else(|| anyhow::anyhow!("{full} in {} must be an object", path.display()))?;
+        allowed(object, keys, &full, path)?;
     }
     Ok(())
 }
@@ -281,8 +292,15 @@ fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> 
         let object = value
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("languages.{name} must be an object"))?;
-        allowed(object, &["limits"], &format!("languages.{name}"), path)?;
-        nested_keys(object, "limits", &Metric::ALL.map(Metric::name), path)?;
+        let prefix = format!("languages.{name}");
+        allowed(object, &["limits"], &prefix, path)?;
+        nested_keys(
+            object,
+            &prefix,
+            "limits",
+            &Metric::ALL.map(Metric::name),
+            path,
+        )?;
     }
     Ok(())
 }
@@ -444,5 +462,59 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("hook.blocks"));
+    }
+
+    #[test]
+    fn unknown_language_limit_key_names_full_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"languages":{"go":{"limits":{"widgetdepth":1}}}}"#,
+        )
+        .unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("`languages.go.limits.widgetdepth`"));
+    }
+
+    #[test]
+    fn unknown_language_limit_key_names_the_language_with_the_typo() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"languages":{"go":{"limits":{"depth":3}},"rust":{"limits":{"widgetdepth":1}}}}"#,
+        )
+        .unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("`languages.rust.limits.widgetdepth`"));
+        assert!(!error.contains("languages.go"));
+    }
+
+    #[test]
+    fn non_object_language_limits_names_full_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"languages":{"go":{"limits":1}}}"#).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("languages.go.limits in ") && error.contains("must be an object"));
+    }
+
+    #[test]
+    fn unknown_top_level_limit_key_has_no_language_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"limits":{"widgetdepth":1}}"#).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("`limits.widgetdepth`"));
+        assert!(!error.contains("languages"));
     }
 }
