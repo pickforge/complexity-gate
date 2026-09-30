@@ -6,12 +6,14 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 
 use crate::Metric;
 
 const DEFAULTS: &str = include_str!("../../../config.default.json");
+const LIMIT: &str = "a non-negative integer or null";
+const LIST: &str = "a list of strings";
 
 /// A `None` limit is `null` in config: the metric is measured but never fails.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -231,30 +233,63 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
         "",
         path,
     )?;
-    nested_keys(object, "", "limits", &Metric::ALL.map(Metric::name), path)?;
-    nested_keys(object, "", "tests", &["patterns", "exempt"], path)?;
+    let limits = nested_keys(object, "", "limits", &Metric::ALL.map(Metric::name), path)?;
+    section_values::<Option<usize>>(limits, "limits", LIMIT, path)?;
+    let tests = nested_keys(object, "", "tests", &["patterns", "exempt"], path)?;
+    section_values::<Vec<String>>(tests, "tests", LIST, path)?;
     validate_test_exempt(object, path)?;
-    nested_keys(object, "", "hook", &["max_blocks"], path)?;
+    let hook = nested_keys(object, "", "hook", &["max_blocks"], path)?;
+    section_values::<usize>(hook, "hook", "a non-negative integer", path)?;
+    if let Some(ignore) = object.get("ignore") {
+        value_type::<Vec<String>>(ignore, "ignore", LIST, path)?;
+    }
     validate_language_keys(object, path)
 }
 
-fn nested_keys(
-    root: &Map<String, Value>,
+fn nested_keys<'a>(
+    root: &'a Map<String, Value>,
     parent: &str,
     key: &str,
     keys: &[&str],
     path: &Path,
+) -> Result<Option<&'a Map<String, Value>>> {
+    let Some(value) = root.get(key) else {
+        return Ok(None);
+    };
+    let full = if parent.is_empty() {
+        key.to_string()
+    } else {
+        format!("{parent}.{key}")
+    };
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("{full} in {} must be an object", path.display()))?;
+    allowed(object, keys, &full, path)?;
+    Ok(Some(object))
+}
+
+/// Checks each value against the type its `Config` field deserializes into,
+/// so a wrong type is reported with its key and file instead of after merging.
+fn section_values<T: DeserializeOwned>(
+    section: Option<&Map<String, Value>>,
+    prefix: &str,
+    expected: &str,
+    path: &Path,
 ) -> Result<()> {
-    if let Some(value) = root.get(key) {
-        let full = if parent.is_empty() {
-            key.to_string()
-        } else {
-            format!("{parent}.{key}")
-        };
-        let object = value
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("{full} in {} must be an object", path.display()))?;
-        allowed(object, keys, &full, path)?;
+    for (key, value) in section.into_iter().flatten() {
+        value_type::<T>(value, &format!("{prefix}.{key}"), expected, path)?;
+    }
+    Ok(())
+}
+
+fn value_type<T: DeserializeOwned>(
+    value: &Value,
+    key: &str,
+    expected: &str,
+    path: &Path,
+) -> Result<()> {
+    if T::deserialize(value).is_err() {
+        bail!("`{key}` in {} must be {expected}", path.display());
     }
     Ok(())
 }
@@ -308,13 +343,14 @@ fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> 
         })?;
         let prefix = format!("languages.{name}");
         allowed(object, &["limits"], &prefix, path)?;
-        nested_keys(
+        let limits = nested_keys(
             object,
             &prefix,
             "limits",
             &Metric::ALL.map(Metric::name),
             path,
         )?;
+        section_values::<Option<usize>>(limits, &format!("{prefix}.limits"), LIMIT, path)?;
     }
     Ok(())
 }
@@ -514,6 +550,123 @@ mod tests {
             error,
             format!("languages.go in {} must be an object", path.display())
         );
+    }
+
+    fn config_error(json: &str) -> (String, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, json).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        (error, path)
+    }
+
+    #[test]
+    fn string_global_limit_names_key_and_config_path() {
+        let (error, path) = config_error(r#"{"limits":{"depth":"4"}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`limits.depth` in {} must be a non-negative integer or null",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn string_language_limit_names_full_path() {
+        let (error, path) = config_error(r#"{"languages":{"go":{"limits":{"depth":"4"}}}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`languages.go.limits.depth` in {} must be a non-negative integer or null",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn float_limit_is_rejected() {
+        let (error, path) = config_error(r#"{"limits":{"lines":1.5}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`limits.lines` in {} must be a non-negative integer or null",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn negative_max_blocks_names_key_and_config_path() {
+        let (error, path) = config_error(r#"{"hook":{"max_blocks":-1}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`hook.max_blocks` in {} must be a non-negative integer",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn string_ignore_is_rejected_as_non_list() {
+        let (error, path) = config_error(r#"{"ignore":"dist/**"}"#);
+        assert_eq!(
+            error,
+            format!("`ignore` in {} must be a list of strings", path.display())
+        );
+    }
+
+    #[test]
+    fn non_string_test_pattern_is_rejected() {
+        let (error, path) = config_error(r#"{"tests":{"patterns":["a",1]}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`tests.patterns` in {} must be a list of strings",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn string_test_exempt_is_rejected_as_non_list() {
+        let (error, path) = config_error(r#"{"tests":{"exempt":"lines"}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`tests.exempt` in {} must be a list of strings",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn non_string_test_exempt_entry_gets_list_message() {
+        let (error, path) = config_error(r#"{"tests":{"exempt":["lines",1]}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`tests.exempt` in {} must be a list of strings",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn null_limits_still_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"limits":{"depth":null},"languages":{"go":{"limits":{"lines":null}}}}"#,
+        )
+        .unwrap();
+        let config = load_config(dir.path(), Some(&path)).unwrap().config;
+        assert_eq!(config.limits.depth, None);
+        assert_eq!(config.limits_for("go").lines, None);
     }
 
     #[test]
