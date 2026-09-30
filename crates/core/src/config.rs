@@ -236,8 +236,8 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
     let limits = nested_keys(object, "", "limits", &Metric::ALL.map(Metric::name), path)?;
     section_values::<Option<usize>>(limits, "limits", LIMIT, path)?;
     let tests = nested_keys(object, "", "tests", &["patterns", "exempt"], path)?;
-    validate_test_exempt(object, path)?;
     section_values::<Vec<String>>(tests, "tests", LIST, path)?;
+    validate_test_exempt(object, path)?;
     let hook = nested_keys(object, "", "hook", &["max_blocks"], path)?;
     section_values::<usize>(hook, "hook", "a non-negative integer", path)?;
     if let Some(ignore) = object.get("ignore") {
@@ -288,7 +288,7 @@ fn value_type<T: DeserializeOwned>(
     expected: &str,
     path: &Path,
 ) -> Result<()> {
-    if serde_json::from_value::<T>(value.clone()).is_err() {
+    if T::deserialize(value).is_err() {
         bail!("`{key}` in {} must be {expected}", path.display());
     }
     Ok(())
@@ -611,12 +611,16 @@ mod tests {
     }
 
     #[test]
-    fn non_list_ignore_and_patterns_are_rejected() {
+    fn string_ignore_is_rejected_as_non_list() {
         let (error, path) = config_error(r#"{"ignore":"dist/**"}"#);
         assert_eq!(
             error,
             format!("`ignore` in {} must be a list of strings", path.display())
         );
+    }
+
+    #[test]
+    fn non_string_test_pattern_is_rejected() {
         let (error, path) = config_error(r#"{"tests":{"patterns":["a",1]}}"#);
         assert_eq!(
             error,
@@ -625,7 +629,23 @@ mod tests {
                 path.display()
             )
         );
+    }
+
+    #[test]
+    fn string_test_exempt_is_rejected_as_non_list() {
         let (error, path) = config_error(r#"{"tests":{"exempt":"lines"}}"#);
+        assert_eq!(
+            error,
+            format!(
+                "`tests.exempt` in {} must be a list of strings",
+                path.display()
+            )
+        );
+    }
+
+    #[test]
+    fn non_string_test_exempt_entry_gets_list_message() {
+        let (error, path) = config_error(r#"{"tests":{"exempt":["lines",1]}}"#);
         assert_eq!(
             error,
             format!(
