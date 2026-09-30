@@ -543,5 +543,14 @@ mod tests {
             .map(|violation| violation.metric.as_str())
             .collect::<Vec<_>>();
         assert_eq!(metrics, ["lines", "params"]);
+
+        let test_file = FileContext {
+            test_file: true,
+            ..file
+        };
+        let mut result = ScanResult::default();
+        add_violations(&test_file, &unit, &mut result);
+        assert_eq!(result.violations.len(), 1);
+        assert_eq!(result.violations[0].metric, "params");
     }
 }
