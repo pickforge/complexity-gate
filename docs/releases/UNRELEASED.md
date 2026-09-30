@@ -12,6 +12,9 @@
   reported with the config file it came from, so it is clear whether the user
   or the repo config holds the typo. An unknown language is reported before
   any error inside its entry. (#43)
+- A config value of the wrong type, such as a string limit or a negative
+  `hook.max_blocks`, is now reported with its full key and the config file it
+  came from, instead of a generic type error after the files are merged. (#46)
 
 ## Validation
 

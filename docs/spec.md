@@ -792,7 +792,8 @@ have no hunks, and never quotes a path.
 
 `languages.<name>.limits` overrides limits for one language (`javascript`,
 `typescript`, `svelte`, `dart`, `rust`, `python`, `go`). Unknown keys → exit 2
-with the key named. Any limit, global or per language, accepts `null` to turn
+with the key named. A value of the wrong type → exit 2 naming the key and the
+config file. Any limit, global or per language, accepts `null` to turn
 that check off; a later layer can turn it back on with a number, and a language
 override of `null` turns it off for that language only.
 
