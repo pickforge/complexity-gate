@@ -159,7 +159,7 @@ values win. Defaults and language overrides are documented in
 cargo test --workspace --locked --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 cargo run -- check crates
-cargo llvm-cov --workspace --locked --fail-under-lines 89
+cargo llvm-cov --workspace --locked --fail-under-lines 94
 ```
 
 ## License
