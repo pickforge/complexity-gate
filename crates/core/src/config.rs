@@ -9,16 +9,9 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::Metric;
+
 const DEFAULTS: &str = include_str!("../../../config.default.json");
-const LIMIT_KEYS: &[&str] = &[
-    "complexity",
-    "cognitive",
-    "depth",
-    "lines",
-    "params",
-    "bool_ops",
-    "widget_depth",
-];
 
 /// A `None` limit is `null` in config: the metric is measured but never fails.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -31,6 +24,32 @@ pub struct Limits {
     pub params: Option<usize>,
     pub bool_ops: Option<usize>,
     pub widget_depth: Option<usize>,
+}
+
+impl Limits {
+    pub fn get(&self, metric: Metric) -> Option<usize> {
+        match metric {
+            Metric::Complexity => self.complexity,
+            Metric::Cognitive => self.cognitive,
+            Metric::Depth => self.depth,
+            Metric::Lines => self.lines,
+            Metric::Params => self.params,
+            Metric::BoolOps => self.bool_ops,
+            Metric::WidgetDepth => self.widget_depth,
+        }
+    }
+
+    pub fn get_mut(&mut self, metric: Metric) -> &mut Option<usize> {
+        match metric {
+            Metric::Complexity => &mut self.complexity,
+            Metric::Cognitive => &mut self.cognitive,
+            Metric::Depth => &mut self.depth,
+            Metric::Lines => &mut self.lines,
+            Metric::Params => &mut self.params,
+            Metric::BoolOps => &mut self.bool_ops,
+            Metric::WidgetDepth => &mut self.widget_depth,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -94,6 +113,20 @@ pub struct LimitOverrides {
         skip_serializing_if = "Option::is_none"
     )]
     pub widget_depth: Option<Option<usize>>,
+}
+
+impl LimitOverrides {
+    pub fn get(&self, metric: Metric) -> Option<Option<usize>> {
+        match metric {
+            Metric::Complexity => self.complexity,
+            Metric::Cognitive => self.cognitive,
+            Metric::Depth => self.depth,
+            Metric::Lines => self.lines,
+            Metric::Params => self.params,
+            Metric::BoolOps => self.bool_ops,
+            Metric::WidgetDepth => self.widget_depth,
+        }
+    }
 }
 
 fn explicit<'de, D>(deserializer: D) -> Result<Option<Option<usize>>, D::Error>
@@ -199,7 +232,7 @@ fn validate_keys(value: &Value, path: &Path) -> Result<()> {
         "",
         path,
     )?;
-    nested_keys(object, "limits", LIMIT_KEYS, path)?;
+    nested_keys(object, "limits", &Metric::ALL.map(Metric::name), path)?;
     nested_keys(object, "tests", &["patterns", "exempt"], path)?;
     validate_test_exempt(object, path)?;
     nested_keys(object, "hook", &["max_blocks"], path)?;
@@ -249,7 +282,7 @@ fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> 
             .as_object()
             .ok_or_else(|| anyhow::anyhow!("languages.{name} must be an object"))?;
         allowed(object, &["limits"], &format!("languages.{name}"), path)?;
-        nested_keys(object, "limits", LIMIT_KEYS, path)?;
+        nested_keys(object, "limits", &Metric::ALL.map(Metric::name), path)?;
     }
     Ok(())
 }
@@ -295,15 +328,13 @@ impl Config {
         else {
             return self.limits.clone();
         };
-        Limits {
-            complexity: overrides.complexity.unwrap_or(self.limits.complexity),
-            cognitive: overrides.cognitive.unwrap_or(self.limits.cognitive),
-            depth: overrides.depth.unwrap_or(self.limits.depth),
-            lines: overrides.lines.unwrap_or(self.limits.lines),
-            params: overrides.params.unwrap_or(self.limits.params),
-            bool_ops: overrides.bool_ops.unwrap_or(self.limits.bool_ops),
-            widget_depth: overrides.widget_depth.unwrap_or(self.limits.widget_depth),
+        let mut limits = self.limits.clone();
+        for metric in Metric::ALL {
+            if let Some(limit) = overrides.get(metric) {
+                *limits.get_mut(metric) = limit;
+            }
         }
+        limits
     }
 
     pub fn matcher(patterns: &[String]) -> Result<GlobSet> {

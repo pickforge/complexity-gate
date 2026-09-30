@@ -5,7 +5,7 @@ use std::{cmp::Reverse, collections::BTreeMap};
 
 use serde::Serialize;
 
-use crate::FunctionMetrics;
+use crate::{FunctionMetrics, Metric};
 
 const ANONYMOUS: &str = "<anonymous>";
 
@@ -64,30 +64,33 @@ pub struct MetricValues {
 }
 
 impl MetricValues {
-    pub fn get(&self, metric: &str) -> Option<usize> {
-        Some(match metric {
-            "complexity" => self.complexity,
-            "cognitive" => self.cognitive,
-            "depth" => self.depth,
-            "lines" => self.lines,
-            "params" => self.params,
-            "bool_ops" => self.bool_ops,
-            "widget_depth" => self.widget_depth,
-            _ => return None,
-        })
+    pub fn get(&self, name: &str) -> Option<usize> {
+        Metric::parse(name).map(|metric| self.value(metric))
+    }
+
+    pub fn value(&self, metric: Metric) -> usize {
+        match metric {
+            Metric::Complexity => self.complexity,
+            Metric::Cognitive => self.cognitive,
+            Metric::Depth => self.depth,
+            Metric::Lines => self.lines,
+            Metric::Params => self.params,
+            Metric::BoolOps => self.bool_ops,
+            Metric::WidgetDepth => self.widget_depth,
+        }
     }
 }
 
 impl From<&FunctionMetrics> for MetricValues {
     fn from(unit: &FunctionMetrics) -> Self {
         Self {
-            complexity: unit.complexity,
-            cognitive: unit.cognitive,
-            depth: unit.depth,
-            lines: unit.lines,
-            params: unit.params,
-            bool_ops: unit.bool_ops,
-            widget_depth: unit.widget_depth,
+            complexity: unit.value(Metric::Complexity),
+            cognitive: unit.value(Metric::Cognitive),
+            depth: unit.value(Metric::Depth),
+            lines: unit.value(Metric::Lines),
+            params: unit.value(Metric::Params),
+            bool_ops: unit.value(Metric::BoolOps),
+            widget_depth: unit.value(Metric::WidgetDepth),
         }
     }
 }
@@ -127,11 +130,11 @@ pub fn pair_units(current: &[FunctionMetrics], base: &[FunctionMetrics]) -> Vec<
 pub fn status(
     base: Option<&FunctionMetrics>,
     pairing: Pairing,
-    metric: &str,
+    metric: Metric,
     value: usize,
 ) -> Status {
     let base_value = match (pairing, base) {
-        (Pairing::Paired(_), Some(unit)) => MetricValues::from(unit).get(metric),
+        (Pairing::Paired(_), Some(unit)) => Some(unit.value(metric)),
         (Pairing::Unmatched, _) => return Status::Unmatched,
         _ => None,
     };
@@ -290,20 +293,23 @@ mod tests {
         let base = unit("f", (0, 10), 16);
         let paired = Pairing::Paired(0);
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 18),
+            status(Some(&base), paired, Metric::Cognitive, 18),
             Status::Worsened
         );
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 16),
+            status(Some(&base), paired, Metric::Cognitive, 16),
             Status::Unchanged
         );
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 15),
+            status(Some(&base), paired, Metric::Cognitive, 15),
             Status::Improved
         );
-        assert_eq!(status(None, Pairing::New, "cognitive", 18), Status::New);
         assert_eq!(
-            status(None, Pairing::Unmatched, "lines", 3),
+            status(None, Pairing::New, Metric::Cognitive, 18),
+            Status::New
+        );
+        assert_eq!(
+            status(None, Pairing::Unmatched, Metric::Lines, 3),
             Status::Unmatched
         );
         assert_eq!(Status::parse("worsened"), Some(Status::Worsened));

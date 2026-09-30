@@ -9,7 +9,8 @@ use ignore::WalkBuilder;
 use serde::Serialize;
 
 use crate::{
-    BaseBlob, ChangedFiles, Config, FunctionMetrics, Language, Limits, LineRange, base_blob,
+    BaseBlob, ChangedFiles, Config, FunctionMetrics, Language, Limits, LineRange, Metric,
+    base_blob,
     baseline::{self, MetricValues, Pairing, Status},
     diff::repository_root,
     load_config, parse_source,
@@ -77,6 +78,18 @@ struct FileContext<'a> {
     language: Language,
     config: &'a Config,
     test_file: bool,
+}
+
+impl FileContext<'_> {
+    fn test_exempt(&self, metric: Metric) -> bool {
+        self.test_file
+            && self
+                .config
+                .tests
+                .exempt
+                .iter()
+                .any(|item| item == metric.name())
+    }
 }
 
 pub fn scan(options: &ScanOptions<'_>) -> Result<ScanResult> {
@@ -324,7 +337,7 @@ fn compare_with_base(
             status: baseline::status(
                 base_unit,
                 pairing[index],
-                &violation.metric,
+                Metric::parse(&violation.metric).expect("violations carry metric names"),
                 violation.value,
             ),
             base_metrics: base_unit.map(MetricValues::from),
@@ -369,28 +382,17 @@ fn base_units(
 
 fn effective_limits(file: &FileContext<'_>, function: &FunctionMetrics) -> Limits {
     let mut limits = file.config.limits_for(file.language.name());
-    for (metric, limit) in [
-        ("complexity", &mut limits.complexity),
-        ("cognitive", &mut limits.cognitive),
-        ("depth", &mut limits.depth),
-        ("lines", &mut limits.lines),
-        ("params", &mut limits.params),
-        ("bool_ops", &mut limits.bool_ops),
-        ("widget_depth", &mut limits.widget_depth),
-    ] {
+    for metric in Metric::ALL {
         if !applies(file, function, metric) {
-            *limit = None;
+            *limits.get_mut(metric) = None;
         }
     }
     limits
 }
 
 /// Whether a metric's limit can fail this function.
-fn applies(file: &FileContext<'_>, function: &FunctionMetrics, metric: &str) -> bool {
-    let test_exempt = file.test_file && file.config.tests.exempt.iter().any(|item| item == metric);
-    let template_exempt = function.template && matches!(metric, "lines" | "params");
-    let widget_exempt = !function.widget && metric == "widget_depth";
-    !(test_exempt || template_exempt || widget_exempt)
+fn applies(file: &FileContext<'_>, function: &FunctionMetrics, metric: Metric) -> bool {
+    !file.test_exempt(metric) && metric.applies_to(function)
 }
 
 fn changed_spans<'a>(path: &Path, changed: Option<&'a ChangedFiles>) -> Option<&'a [LineRange]> {
@@ -408,28 +410,17 @@ fn touches(function: &FunctionMetrics, ranges: &[LineRange]) -> bool {
 }
 
 fn add_violations(file: &FileContext<'_>, function: &FunctionMetrics, result: &mut ScanResult) {
-    let limits = file.config.limits_for(file.language.name());
-    let metrics = [
-        ("complexity", function.complexity, limits.complexity),
-        ("cognitive", function.cognitive, limits.cognitive),
-        ("depth", function.depth, limits.depth),
-        ("lines", function.lines, limits.lines),
-        ("params", function.params, limits.params),
-        ("bool_ops", function.bool_ops, limits.bool_ops),
-        ("widget_depth", function.widget_depth, limits.widget_depth),
-    ];
-    for (metric, value, limit) in metrics {
-        let Some(limit) = limit.filter(|limit| value > *limit) else {
+    let limits = effective_limits(file, function);
+    for metric in Metric::ALL {
+        let value = function.value(metric);
+        let Some(limit) = limits.get(metric).filter(|limit| value > *limit) else {
             continue;
         };
-        if file.test_file && file.config.tests.exempt.iter().any(|item| item == metric) {
-            continue;
-        }
         result.violations.push(Violation {
             file: file.display.to_path_buf(),
             line: function.line,
             function: function.function.clone(),
-            metric: metric.to_owned(),
+            metric: metric.name().to_owned(),
             value,
             limit,
             baseline: None,
@@ -504,5 +495,62 @@ fn read_reason(error: &std::io::Error) -> String {
         "not valid UTF-8".to_owned()
     } else {
         format!("cannot read: {error}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn violations_skip_metrics_that_do_not_apply_to_the_unit() {
+        let config: Config =
+            serde_json::from_str(include_str!("../../../config.default.json")).unwrap();
+        let file = FileContext {
+            display: Path::new("page.svelte"),
+            matched: Path::new("page.svelte"),
+            language: Language::Svelte,
+            config: &config,
+            test_file: false,
+        };
+        let unit = FunctionMetrics {
+            function: "<template>".to_owned(),
+            line: 1,
+            end_line: 1,
+            complexity: 0,
+            cognitive: 0,
+            depth: 0,
+            lines: 500,
+            params: 50,
+            bool_ops: 0,
+            widget_depth: 50,
+            span: (0, 1),
+            template: true,
+            widget: false,
+        };
+        let mut result = ScanResult::default();
+        add_violations(&file, &unit, &mut result);
+        assert_eq!(result.violations, []);
+
+        let unit = FunctionMetrics {
+            template: false,
+            ..unit
+        };
+        add_violations(&file, &unit, &mut result);
+        let metrics = result
+            .violations
+            .iter()
+            .map(|violation| violation.metric.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(metrics, ["lines", "params"]);
+
+        let test_file = FileContext {
+            test_file: true,
+            ..file
+        };
+        let mut result = ScanResult::default();
+        add_violations(&test_file, &unit, &mut result);
+        assert_eq!(result.violations.len(), 1);
+        assert_eq!(result.violations[0].metric, "params");
     }
 }
