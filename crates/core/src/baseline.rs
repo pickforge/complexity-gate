@@ -5,7 +5,7 @@ use std::{cmp::Reverse, collections::BTreeMap};
 
 use serde::Serialize;
 
-use crate::FunctionMetrics;
+use crate::{FunctionMetrics, Metric};
 
 const ANONYMOUS: &str = "<anonymous>";
 
@@ -64,30 +64,33 @@ pub struct MetricValues {
 }
 
 impl MetricValues {
-    pub fn get(&self, metric: &str) -> Option<usize> {
-        Some(match metric {
-            "complexity" => self.complexity,
-            "cognitive" => self.cognitive,
-            "depth" => self.depth,
-            "lines" => self.lines,
-            "params" => self.params,
-            "bool_ops" => self.bool_ops,
-            "widget_depth" => self.widget_depth,
-            _ => return None,
-        })
+    pub fn get(&self, name: &str) -> Option<usize> {
+        Metric::parse(name).map(|metric| self.value(metric))
+    }
+
+    pub fn value(&self, metric: Metric) -> usize {
+        match metric {
+            Metric::Complexity => self.complexity,
+            Metric::Cognitive => self.cognitive,
+            Metric::Depth => self.depth,
+            Metric::Lines => self.lines,
+            Metric::Params => self.params,
+            Metric::BoolOps => self.bool_ops,
+            Metric::WidgetDepth => self.widget_depth,
+        }
     }
 }
 
 impl From<&FunctionMetrics> for MetricValues {
     fn from(unit: &FunctionMetrics) -> Self {
         Self {
-            complexity: unit.complexity,
-            cognitive: unit.cognitive,
-            depth: unit.depth,
-            lines: unit.lines,
-            params: unit.params,
-            bool_ops: unit.bool_ops,
-            widget_depth: unit.widget_depth,
+            complexity: unit.value(Metric::Complexity),
+            cognitive: unit.value(Metric::Cognitive),
+            depth: unit.value(Metric::Depth),
+            lines: unit.value(Metric::Lines),
+            params: unit.value(Metric::Params),
+            bool_ops: unit.value(Metric::BoolOps),
+            widget_depth: unit.value(Metric::WidgetDepth),
         }
     }
 }
@@ -131,7 +134,7 @@ pub fn status(
     value: usize,
 ) -> Status {
     let base_value = match (pairing, base) {
-        (Pairing::Paired(_), Some(unit)) => MetricValues::from(unit).get(metric),
+        (Pairing::Paired(_), Some(unit)) => Metric::parse(metric).map(|metric| unit.value(metric)),
         (Pairing::Unmatched, _) => return Status::Unmatched,
         _ => None,
     };

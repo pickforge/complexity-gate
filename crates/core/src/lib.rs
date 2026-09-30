@@ -5,6 +5,7 @@ mod cognitive;
 pub mod config;
 pub mod diff;
 pub mod language;
+mod metric;
 pub mod scan;
 
 pub use baseline::{MetricValues, Pairing, Status, pair_units};
@@ -14,4 +15,5 @@ pub use diff::{
     parse_diff_hunks,
 };
 pub use language::{FunctionMetrics, Language, coverage_unknowns, grammar_inventory, parse_source};
+pub use metric::Metric;
 pub use scan::{Baseline, ScanOptions, ScanResult, Unverified, Violation, scan};
