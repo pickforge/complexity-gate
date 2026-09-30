@@ -162,17 +162,34 @@ fn assert_strictness(actual: &[Expected], references: &[ReferenceFunction], dire
 }
 
 impl From<FunctionMetrics> for Expected {
+    /// Destructured without `..`, so a new metric field fails to compile
+    /// here instead of going unchecked by every fixture.
     fn from(value: FunctionMetrics) -> Self {
+        let FunctionMetrics {
+            function,
+            line,
+            end_line: _,
+            complexity,
+            cognitive,
+            depth,
+            lines,
+            params,
+            bool_ops,
+            widget_depth,
+            span: _,
+            template: _,
+            widget: _,
+        } = value;
         Self {
-            function: value.function,
-            line: value.line,
-            complexity: value.complexity,
-            cognitive: value.cognitive,
-            depth: value.depth,
-            lines: value.lines,
-            params: value.params,
-            bool_ops: value.bool_ops,
-            widget_depth: value.widget_depth,
+            function,
+            line,
+            complexity,
+            cognitive,
+            depth,
+            lines,
+            params,
+            bool_ops,
+            widget_depth,
         }
     }
 }

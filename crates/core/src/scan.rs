@@ -337,7 +337,7 @@ fn compare_with_base(
             status: baseline::status(
                 base_unit,
                 pairing[index],
-                &violation.metric,
+                Metric::parse(&violation.metric).expect("violations carry metric names"),
                 violation.value,
             ),
             base_metrics: base_unit.map(MetricValues::from),
@@ -410,15 +410,12 @@ fn touches(function: &FunctionMetrics, ranges: &[LineRange]) -> bool {
 }
 
 fn add_violations(file: &FileContext<'_>, function: &FunctionMetrics, result: &mut ScanResult) {
-    let limits = file.config.limits_for(file.language.name());
+    let limits = effective_limits(file, function);
     for metric in Metric::ALL {
         let value = function.value(metric);
         let Some(limit) = limits.get(metric).filter(|limit| value > *limit) else {
             continue;
         };
-        if file.test_exempt(metric) {
-            continue;
-        }
         result.violations.push(Violation {
             file: file.display.to_path_buf(),
             line: function.line,
@@ -498,5 +495,53 @@ fn read_reason(error: &std::io::Error) -> String {
         "not valid UTF-8".to_owned()
     } else {
         format!("cannot read: {error}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn violations_skip_metrics_that_do_not_apply_to_the_unit() {
+        let config: Config =
+            serde_json::from_str(include_str!("../../../config.default.json")).unwrap();
+        let file = FileContext {
+            display: Path::new("page.svelte"),
+            matched: Path::new("page.svelte"),
+            language: Language::Svelte,
+            config: &config,
+            test_file: false,
+        };
+        let unit = FunctionMetrics {
+            function: "<template>".to_owned(),
+            line: 1,
+            end_line: 1,
+            complexity: 0,
+            cognitive: 0,
+            depth: 0,
+            lines: 500,
+            params: 50,
+            bool_ops: 0,
+            widget_depth: 50,
+            span: (0, 1),
+            template: true,
+            widget: false,
+        };
+        let mut result = ScanResult::default();
+        add_violations(&file, &unit, &mut result);
+        assert_eq!(result.violations, []);
+
+        let unit = FunctionMetrics {
+            template: false,
+            ..unit
+        };
+        add_violations(&file, &unit, &mut result);
+        let metrics = result
+            .violations
+            .iter()
+            .map(|violation| violation.metric.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(metrics, ["lines", "params"]);
     }
 }

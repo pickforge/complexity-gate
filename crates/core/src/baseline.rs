@@ -130,11 +130,11 @@ pub fn pair_units(current: &[FunctionMetrics], base: &[FunctionMetrics]) -> Vec<
 pub fn status(
     base: Option<&FunctionMetrics>,
     pairing: Pairing,
-    metric: &str,
+    metric: Metric,
     value: usize,
 ) -> Status {
     let base_value = match (pairing, base) {
-        (Pairing::Paired(_), Some(unit)) => Metric::parse(metric).map(|metric| unit.value(metric)),
+        (Pairing::Paired(_), Some(unit)) => Some(unit.value(metric)),
         (Pairing::Unmatched, _) => return Status::Unmatched,
         _ => None,
     };
@@ -293,20 +293,23 @@ mod tests {
         let base = unit("f", (0, 10), 16);
         let paired = Pairing::Paired(0);
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 18),
+            status(Some(&base), paired, Metric::Cognitive, 18),
             Status::Worsened
         );
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 16),
+            status(Some(&base), paired, Metric::Cognitive, 16),
             Status::Unchanged
         );
         assert_eq!(
-            status(Some(&base), paired, "cognitive", 15),
+            status(Some(&base), paired, Metric::Cognitive, 15),
             Status::Improved
         );
-        assert_eq!(status(None, Pairing::New, "cognitive", 18), Status::New);
         assert_eq!(
-            status(None, Pairing::Unmatched, "lines", 3),
+            status(None, Pairing::New, Metric::Cognitive, 18),
+            Status::New
+        );
+        assert_eq!(
+            status(None, Pairing::Unmatched, Metric::Lines, 3),
             Status::Unmatched
         );
         assert_eq!(Status::parse("worsened"), Some(Status::Worsened));
