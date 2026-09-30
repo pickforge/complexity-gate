@@ -8,6 +8,10 @@
   reported with its `languages.<name>` path, for example
   `languages.go.limits.widgetdepth`, instead of a bare `limits.widgetdepth`.
   (#41)
+- An unknown language name or a non-object `languages.<name>` entry is now
+  reported with the config file it came from, so it is clear whether the user
+  or the repo config holds the typo. An unknown language is reported before
+  any error inside its entry. (#43)
 
 ## Validation
 

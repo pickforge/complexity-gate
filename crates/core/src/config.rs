@@ -174,7 +174,6 @@ pub fn load_config(start: &Path, explicit: Option<&Path>) -> Result<ConfigResolu
         chain.push(path);
     }
     let mut config: Config = serde_json::from_value(value).context("invalid configuration")?;
-    validate_languages(&config)?;
     config.hook.max_blocks = config.hook.max_blocks.max(1);
     Ok(ConfigResolution { config, chain })
 }
@@ -282,6 +281,15 @@ fn validate_test_exempt(root: &Map<String, Value>, path: &Path) -> Result<()> {
 }
 
 fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> {
+    const LANGUAGES: &[&str] = &[
+        "javascript",
+        "typescript",
+        "svelte",
+        "dart",
+        "rust",
+        "python",
+        "go",
+    ];
     let Some(value) = root.get("languages") else {
         return Ok(());
     };
@@ -289,9 +297,15 @@ fn validate_language_keys(root: &Map<String, Value>, path: &Path) -> Result<()> 
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("languages in {} must be an object", path.display()))?;
     for (name, value) in languages {
-        let object = value
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("languages.{name} must be an object"))?;
+        if !LANGUAGES.contains(&name.as_str()) {
+            bail!(
+                "unknown config key `languages.{name}` in {}",
+                path.display()
+            );
+        }
+        let object = value.as_object().ok_or_else(|| {
+            anyhow::anyhow!("languages.{name} in {} must be an object", path.display())
+        })?;
         let prefix = format!("languages.{name}");
         allowed(object, &["limits"], &prefix, path)?;
         nested_keys(
@@ -314,24 +328,6 @@ fn allowed(object: &Map<String, Value>, keys: &[&str], prefix: &str, path: &Path
                 format!("{prefix}.{key}")
             };
             bail!("unknown config key `{full}` in {}", path.display());
-        }
-    }
-    Ok(())
-}
-
-fn validate_languages(config: &Config) -> Result<()> {
-    const LANGUAGES: &[&str] = &[
-        "javascript",
-        "typescript",
-        "svelte",
-        "dart",
-        "rust",
-        "python",
-        "go",
-    ];
-    for name in config.languages.keys() {
-        if !LANGUAGES.contains(&name.as_str()) {
-            bail!("unknown config key `languages.{name}`");
         }
     }
     Ok(())
@@ -504,6 +500,34 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("languages.go.limits in ") && error.contains("must be an object"));
+    }
+
+    #[test]
+    fn non_object_language_entry_names_config_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"languages":{"go":1}}"#).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            error,
+            format!("languages.go in {} must be an object", path.display())
+        );
+    }
+
+    #[test]
+    fn unknown_language_names_config_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{"languages":{"cobol":1}}"#).unwrap();
+        let error = load_config(dir.path(), Some(&path))
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            error,
+            format!("unknown config key `languages.cobol` in {}", path.display())
+        );
     }
 
     #[test]
