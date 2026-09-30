@@ -138,6 +138,34 @@ mod tests {
         }
     }
 
+    /// `ALL` is the one list a match cannot check, so tie it to the structs a
+    /// new metric has to be added to.
+    #[test]
+    fn all_covers_every_metric_field() {
+        fn keys(value: serde_json::Value) -> Vec<String> {
+            let mut keys = value
+                .as_object()
+                .unwrap()
+                .keys()
+                .filter(|key| !matches!(key.as_str(), "function" | "line" | "end_line"))
+                .cloned()
+                .collect::<Vec<_>>();
+            keys.sort_unstable();
+            keys
+        }
+        let unit = unit(false, false);
+        let limits: crate::Config =
+            serde_json::from_str(include_str!("../../../config.default.json")).unwrap();
+        let mut names = Metric::ALL.map(|metric| metric.name().to_owned()).to_vec();
+        names.sort_unstable();
+        assert_eq!(keys(serde_json::to_value(&limits.limits).unwrap()), names);
+        assert_eq!(
+            keys(serde_json::to_value(MetricValues::from(&unit)).unwrap()),
+            names
+        );
+        assert_eq!(keys(serde_json::to_value(&unit).unwrap()), names);
+    }
+
     #[test]
     fn names_match_the_default_config_limits() {
         let defaults: serde_json::Value =
