@@ -4,7 +4,10 @@
 
 ## Changes
 
-- <One line per user-visible change, with its issue or PR number.>
+- An unknown or non-object per-language limit key in `.pickcheck.json` is now
+  reported with its `languages.<name>` path, for example
+  `languages.go.limits.widgetdepth`, instead of a bare `limits.widgetdepth`.
+  (#41)
 
 ## Validation
 

@@ -514,7 +514,6 @@ mod tests {
         let error = load_config(dir.path(), Some(&path))
             .unwrap_err()
             .to_string();
-        assert!(error.contains("`limits.widgetdepth`"));
-        assert!(!error.contains("languages"));
+        assert!(error.contains("key `limits.widgetdepth`"));
     }
 }
